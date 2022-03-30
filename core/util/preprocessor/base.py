@@ -113,28 +113,40 @@ class Preprocessor(Dataset):
         return np.stack(np.meshgrid(x, x), -1).reshape(-1, 2)
 
     # implement a candidate sampling with equal distance;
-    def lane_candidate_sampling(self, centerline_list, distance=0.5, viz=False):
-        """the input are list of lines, each line containing"""
+    def lane_points_sampling(self, centerline_list, distance=0.5, viz=False):
+        """
+        increase amount of centerline points by making interpolation between neighbor points
+        :param centerline_list: list of lines, line - array of points
+        :param distance: distance step of interpolation algorithm
+        return list of all points (w/o deviding into lines)
+        """
+
         candidates = []
         for line in centerline_list:
             for i in range(len(line) - 1):
                 if np.any(np.isnan(line[i])) or np.any(np.isnan(line[i+1])):
                     continue
+
                 [x_diff, y_diff] = line[i+1] - line[i]
+
                 if x_diff == 0.0 and y_diff == 0.0:
                     continue
+
                 candidates.append(line[i])
 
                 # compute displacement along each coordinate
-                den = np.hypot(x_diff, y_diff) + np.finfo(float).eps
-                d_x = distance * (x_diff / den)
-                d_y = distance * (y_diff / den)
+                hypot_len = np.hypot(x_diff, y_diff) + np.finfo(float).eps
+                d_x = distance * (x_diff / hypot_len)
+                d_y = distance * (y_diff / hypot_len)
 
-                num_c = np.floor(den / distance).astype(np.int)
+                num_c = np.floor(hypot_len / distance).astype(np.int)
                 pt = copy.deepcopy(line[i])
+
+                # Make interpolation by going from current to next point step-by-step
                 for j in range(num_c):
                     pt += np.array([d_x, d_y])
                     candidates.append(copy.deepcopy(pt))
+
         candidates = np.unique(np.asarray(candidates), axis=0)
 
         if viz:
@@ -152,29 +164,27 @@ class Preprocessor(Dataset):
         return candidates
 
     @staticmethod
-    def get_candidate_gt(target_candidate, gt_target):
+    def get_gt_target_candidate(target_candidates, gt_target):
         """
         find the target candidate closest to the gt and output the one-hot ground truth
-        :param target_candidate, (N, 2) candidates
+        :param target_candidates, (N, 2) candidates
         :param gt_target, (1, 2) the coordinate of final target
         """
-        displacement = gt_target - target_candidate
-        gt_index = np.argmin(np.power(displacement[:, 0], 2) + np.power(displacement[:, 1], 2))
+        displacement = gt_target - target_candidates
 
-        onehot = np.zeros((target_candidate.shape[0], 1))
-        onehot[gt_index] = 1
+        # find index of the closest target candidate
+        closest_target_index = np.argmin(np.power(displacement[:, 0], 2) + np.power(displacement[:, 1], 2))
 
-        offset_xy = gt_target - target_candidate[gt_index]
+        onehot = np.zeros((target_candidates.shape[0], 1))
+        onehot[closest_target_index] = 1
+
+        offset_xy = gt_target - target_candidates[closest_target_index]
         return onehot, offset_xy
 
     @staticmethod
     def plot_target_candidates(candidate_centerlines, traj_obs, traj_fut, candidate_targets):
         fig = plt.figure(1, figsize=(8, 7))
         fig.clear()
-
-        # plot centerlines
-        for centerline_coords in candidate_centerlines:
-            visualize_centerline(centerline_coords)
 
         # plot traj
         plt.plot(traj_obs[:, 0], traj_obs[:, 1], "x-", color="#d33e4c", alpha=1, linewidth=1, zorder=15)
@@ -185,6 +195,10 @@ class Preprocessor(Dataset):
 
         # plot target sample
         plt.scatter(candidate_targets[:, 0], candidate_targets[:, 1], marker="*", c="green", alpha=1, s=6, zorder=15)
+
+        # plot centerlines
+        for centerline_coords in candidate_centerlines:
+            visualize_centerline(centerline_coords)
 
         plt.xlabel("Map X")
         plt.ylabel("Map Y")

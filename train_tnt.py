@@ -18,8 +18,16 @@ def train(args):
     :param args:
     :return:
     """
+
+    print('Start dataset init')
+    print()
+
     train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")).shuffle()
     eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
+
+    print('Success dataset init')
+    print()
+    print()
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M")
@@ -76,9 +84,15 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="dataset/interm_tnt_n_s_0804_small",
+    # parser.add_argument("-d", "--data_root", required=False, type=str, default="dataset/interm_tnt_n_s_0804_small",
+    #                     help="root dir for datasets")
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small",
                         help="root dir for datasets")
-    parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/tnt/",
+
+    # parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/tnt/",
+    #                     help="ex)dir to save checkpoint and model")
+
+    parser.add_argument("-o", "--output_dir", required=False, type=str, default="r/home/techtoker/projects/TNT-Trajectory-Predition/run/tnt/",
                         help="ex)dir to save checkpoint and model")
 
     parser.add_argument("-l", "--num_glayer", type=int, default=1,
@@ -86,9 +100,9 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--aux_loss", action="store_true", default=True,
                         help="Training with the auxiliary recovery loss")
 
-    parser.add_argument("-b", "--batch_size", type=int, default=2,
+    parser.add_argument("-b", "--batch_size", type=int, default=64,
                         help="number of batch_size")
-    parser.add_argument("-e", "--n_epoch", type=int, default=50,
+    parser.add_argument("-e", "--n_epoch", type=int, default=8, #50,
                         help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=16,
                         help="dataloader worker size")

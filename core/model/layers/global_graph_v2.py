@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 class GlobalGraph(nn.Module):
     """
-    Global graph that compute the global information
+    Global graph that compute the global information (over whole sub-graphs)
     """
     def __init__(self, in_channels,
                  global_graph_width,

@@ -75,7 +75,7 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="dataset/interm_tnt_n_s_0804_small",
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small",
                         help="root dir for datasets")
     parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/vectornet/",
                         help="ex)dir to save checkpoint and model")

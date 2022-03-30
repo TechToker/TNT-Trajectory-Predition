@@ -30,6 +30,7 @@ class VectorNetBackbone(nn.Module):
                  aux_mlp_width=64,
                  with_aux: bool = False,
                  device=torch.device("cpu")):
+
         super(VectorNetBackbone, self).__init__()
         # some params
         self.num_subgraph_layres = num_subgraph_layres
@@ -62,11 +63,11 @@ class VectorNetBackbone(nn.Module):
     def forward(self, data):
         """
         args:
-            data (Data): [x, y, cluster, edge_index, valid_len]
+            data (Batch): [x, y, cluster, edge_index, valid_len]
         """
         batch_size = data.num_graphs
-        time_step_len = data.time_step_len[0].int()
-        valid_lens = data.valid_len
+        time_step_len = data.time_step_len[0].int() # get maximum of amount of polyline on scene
+        valid_lens = data.valid_len # get number of polylines on scene
 
         id_embedding = data.identifier
 
@@ -75,12 +76,14 @@ class VectorNetBackbone(nn.Module):
         if self.training and self.with_aux:
             randoms = 1 + torch.rand((batch_size,), device=self.device) * (valid_lens - 2) + \
                       time_step_len * torch.arange(batch_size, device=self.device)
+
             # mask_polyline_indices = [torch.randint(1, valid_lens[i] - 1) + i * time_step_len for i in range(batch_size)]
+
             mask_polyline_indices = randoms.long()
             aux_gt = sub_graph_out[mask_polyline_indices]
             sub_graph_out[mask_polyline_indices] = 0.0
 
-        # reconstruct the batch global interaction graph data
+        # reconstruct the batch global interaction graph data # TODO: Why we concat it with embedding
         x = torch.cat([sub_graph_out, id_embedding], dim=1).view(batch_size, -1, self.subgraph.out_channels + 2)
         valid_lens = data.valid_len
 

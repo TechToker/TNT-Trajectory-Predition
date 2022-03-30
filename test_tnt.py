@@ -52,13 +52,13 @@ def test(args):
         model_path=args.resume_model if hasattr(args, "resume_model") and args.resume_model else None
     )
 
-    trainer.test(miss_threshold=2.0, save_pred=True, convert_coordinate=True)
+    trainer.test(miss_threshold=2.0, save_pred=True, convert_coordinate=True, plot=True, compute_metric=True)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", type=str, default="dataset/interm_data_small",
+    parser.add_argument("-d", "--data_root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small",
                         help="root dir for datasets")
     parser.add_argument("-s", "--split", type=str, default="test")
 
@@ -78,6 +78,6 @@ if __name__ == "__main__":
                         # default="/home/jb/projects/Code/trajectory-prediction/TNT-Trajectory-Predition/run/tnt/01-22-18-55/best_TNT.pth",
                         help="resume a model state for fine-tune")
 
-    parser.add_argument("-d", "--save_dir", type=str, default="test_result")
+    parser.add_argument("-dd", "--save_dir", type=str, default="test_result")
     args = parser.parse_args()
     test(args)

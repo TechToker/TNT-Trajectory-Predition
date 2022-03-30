@@ -44,7 +44,7 @@ class SubGraph(nn.Module):
             sub_data (Data): [x, y, cluster, edge_index, valid_len]
         """
         x = sub_data.x
-
+        # TODO: WHY WE NEED TO USE CYCLE
         for name, layer in self.layer_seq.named_modules():
             if isinstance(layer, MLP):
                 x = layer(x)
@@ -55,7 +55,7 @@ class SubGraph(nn.Module):
 
         x = self.linear(x)
         sub_data.x = x
-        out_data = max_pool(sub_data.cluster, sub_data)
+        out_data = max_pool(sub_data.cluster, sub_data) # obtain polyline level features
         x = out_data.x
 
         assert x.shape[0] % int(sub_data.time_step_len[0]) == 0

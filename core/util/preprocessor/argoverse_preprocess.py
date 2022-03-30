@@ -228,7 +228,7 @@ class ArgoversePreprocessor(Preprocessor):
 
         # handle the gt
         if len(gt_xys) > 0:
-            candidate_gt, offset_gt = self.get_candidate_gt(candidates, gt_xys[-1, :])
+            candidate_gt, offset_gt = self.get_gt_target_candidate(candidates, gt_xys[-1, :])
         else:
             candidate_gt, offset_gt = None, None
 
@@ -415,7 +415,7 @@ class ArgoversePreprocessor(Preprocessor):
         city_name = agent_df["CITY_NAME"].values[0]
         xy = agent_df[['X', 'Y']].values[:self.obs_horizon]
         centerlines, _ = self.map.get_candidate_centerlines_for_traj(xy, city_name)
-        return self.lane_candidate_sampling(centerlines, distance=distance)
+        return self.lane_points_sampling(centerlines, distance=distance)
 
     @staticmethod
     def __trans_gt_offset_format(gt):

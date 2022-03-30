@@ -282,9 +282,13 @@ class TNTTrainer(Trainer):
         if plot:
             fig, ax = plt.subplots()
             for key in forecasted_trajectories.keys():
-                ax.set_xlim(-15, 15)
+                ax.axis('equal')
+
+                a = gt_trajectories[key]
+                b = forecasted_trajectories[key][0]
+
                 show_pred_and_gt(ax, gt_trajectories[key], forecasted_trajectories[key])
-                plt.pause(3)
+                plt.pause(10)
                 ax.clear()
 
         # todo: save the output in argoverse format

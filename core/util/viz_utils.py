@@ -19,9 +19,9 @@ LINE = {
 def show_pred_and_gt(ax, y_gt, y_pred):
     """"""
     # plot gt
-    ax.plot(y_gt[:, 0], y_gt[:, 1], COLOR[0]+"x"+LINE[0])
+    ax.plot(y_gt[:, 0], y_gt[:, 1], 'g') #COLOR[0]+"x"+LINE[0])
 
     # plot preds
     for pred in y_pred:
-        ax.plot(pred[:, 0], pred[:, 1], COLOR[1]+LINE[1])
+        ax.plot(pred[:, 0], pred[:, 1], 'r') # COLOR[1]+LINE[1])
 
