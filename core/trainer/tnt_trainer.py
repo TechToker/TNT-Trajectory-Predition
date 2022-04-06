@@ -220,8 +220,6 @@ class TNTTrainer(Trainer):
         :param convert_coordinate: bool, True: under original coordinate, False: under the relative coordinate
         :param save_pred: store the prediction or not, store in the Argoverse benchmark format
         """
-        self.model.eval()
-
         forecasted_trajectories, gt_trajectories = {}, {}
 
         # k = self.model.k if not self.multi_gpu else self.model.module.k

@@ -1,26 +1,23 @@
-import sys
-import os
-import numpy as np
-import pandas as pd
 from tqdm import tqdm
-
+import pandas as pd
+import numpy as np
 import gc
+
+import time
+
+import os
+import os.path as osp
 from copy import deepcopy, copy
 
 import torch
-from torch_geometric.data import Data, Dataset, InMemoryDataset, DataLoader
-# from torch.utils.data import DataLoader
-
-sys.path.append("core/dataloader")
+from torch_geometric.data import Data, Dataset, download_url
 
 
 def get_fc_edge_index(node_indices):
     """
-    node_indices: np.array([indices]), the indices of nodes connecting with each other;
+    node_indices: np.array([indices]), the indices of nodes connecting with each other (two directional);
     return a tensor(2, edges), indicing edge_index
-
-    i.e return 2dim array where rows represent connection between each index (from node_indices) (order matter)
-    format : 0 - 0, 1 - 0, 2 - 0, 1 - 0, 1 - 1, 1 - 2, 2 - 0, 2 - 1, 2 - 2
+    format : 0 - 0, 1 - 0, 2 - 0, 0 - 1, 1 - 1, 2 - 1, 0 - 2, 1 - 2, 2 - 2
     """
     xx, yy = np.meshgrid(node_indices, node_indices)
     xy = np.vstack(([xx.reshape(-1), yy.reshape(-1)])).astype(np.int64)
@@ -32,8 +29,6 @@ def get_traj_edge_index(node_indices):
     generate the polyline graph for traj, each node are only directionally connected with the nodes in its future
     node_indices: np.array([indices]), the indices of nodes connecting with each other;
     return a tensor(2, edges), indicing edge_index;
-
-    i.e return 2dim array where rows represent connection between each index (from node_indices) (order dont matter)
     format : 0 - 0, 0 - 1, 0 - 2, 1 - 1, 1 - 2, 2 - 2
     """
     edge_index = np.empty((2, 0))
@@ -59,20 +54,29 @@ class GraphData(Data):
 # %%
 
 
-# dataset loader which loads data into memory
-class ArgoverseInMem(InMemoryDataset):
-    def __init__(self, root, transform=None, pre_transform=None):
-        super(ArgoverseInMem, self).__init__(root, transform, pre_transform)
-        self.data, self.slices = torch.load(self.processed_paths[0])
+class ArgoverseCustom(Dataset):
+    def __init__(self, root, amount_processed_files, transform=None, pre_transform=None, pre_filter=None):
+
+        # for train 205942 or 1632; for valid 352
+        self.processed_files = []
+        for idx in range(amount_processed_files):
+            self.processed_files.append(f'data_{idx}.pt')
+
+        self.processed_files_len = len(self.processed_file_names)
+
+        super().__init__(root, transform, pre_transform, pre_filter)
+
+        self.total_time = 0
+        self.amount_operations = 0
         gc.collect()
 
     @property
     def raw_file_names(self):
         return [file for file in os.listdir(self.raw_dir) if "features" in file and file.endswith(".pkl")]
 
-    @property
+    @property # A list of files in the processed_dir which needs to be found in order to skip the processing.
     def processed_file_names(self):
-        return ['data.pt']
+        return self.processed_files
 
     def download(self):
         pass
@@ -102,8 +106,6 @@ class ArgoverseInMem(InMemoryDataset):
         print("\n[Argoverse]: The maximum of valid length is {}.".format(num_valid_len_max))
         print("[Argoverse]: The maximum of no. of candidates is {}.".format(num_candidate_max))
 
-        # pad vectors to the largest polyline id and extend cluster, save the Data to disk
-        data_list = []
         for ind, raw_path in enumerate(tqdm(self.raw_paths, desc="Transforming the data to GraphData...")):
             raw_data = pd.read_pickle(raw_path)
 
@@ -135,15 +137,17 @@ class ArgoverseInMem(InMemoryDataset):
                 seq_id=torch.tensor([int(raw_data['seq_id'])]).int()
             )
 
-            data_list.append(graph_input)
+            torch.save(graph_input, osp.join(self.processed_dir, f'data_{ind}.pt'))
 
-        # Because saving a huge python list is rather slow, we collate the list into one huge Data
-        # slices dictionary to reconstruct single examples from this object
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
+    def len(self):
+        return self.processed_files_len
 
     def get(self, idx):
-        data = super(ArgoverseInMem, self).get(idx).clone()
+        #start_time = time.time()
+        data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
+
+        # print(f'Load time : {time.time() - start_time}')
+        # start_postproc = time.time()
 
         feature_len = data.x.shape[1] # get amount of features per node
         index_to_pad = data.time_step_len[0].item() # get maximum of amount of polyline on scene
@@ -160,6 +164,11 @@ class ArgoverseInMem(InMemoryDataset):
                                          torch.zeros((num_cand_max - len(data.candidate), 1))])
         data.candidate = torch.cat([data.candidate, torch.zeros((num_cand_max - len(data.candidate), 2))])
         data.candidate_gt = torch.cat([data.candidate_gt, torch.zeros((num_cand_max - len(data.candidate_gt), 1))])
+
+        # self.total_time += (time.time() - start_time)
+        # self.amount_operations += 1
+        #
+        # print(f'avg time: {self.total_time / self.amount_operations}')
 
         return data
 
@@ -243,37 +252,4 @@ class ArgoverseInMem(InMemoryDataset):
         traj_fut = data_seq['future_trajectories'].values[0][0]
         offset_fut = np.vstack([traj_fut[0, :] - traj_obs[-1, :2], traj_fut[1:, :] - traj_fut[:-1, :]])
         return offset_fut.reshape(-1).astype(np.float32)
-
-
-if __name__ == "__main__":
-
-    # for folder in os.listdir("./data/interm_data"):
-    INTERMEDIATE_DATA_DIR = "../../dataset/interm_data_small"
-    # INTERMEDIATE_DATA_DIR = "../../dataset/interm_tnt_n_s_0804"
-    # INTERMEDIATE_DATA_DIR = "/media/Data/autonomous_driving/Argoverse/intermediate"
-
-    for folder in ["train", "val", "test"]:
-    # for folder in ["test"]:
-        dataset_input_path = os.path.join(INTERMEDIATE_DATA_DIR, f"{folder}_intermediate")
-
-        # dataset = Argoverse(dataset_input_path)
-        dataset = ArgoverseInMem(dataset_input_path).shuffle()
-        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=True, pin_memory=True)
-        for k in range(1):
-            for i, data in enumerate(tqdm(batch_iter, total=len(batch_iter), bar_format="{l_bar}{r_bar}")):
-                pass
-
-            # print("{}".format(i))
-            # candit_len = data.candidate_len_max[0]
-            # print(candit_len)
-            # target_candite = data.candidate[candit_gt.squeeze(0).bool()]
-            # try:
-            #     # loss = torch.nn.functional.binary_cross_entropy(candit_gt, candit_gt)
-            #     target_candite = data.candidate[candit_gt.bool()]
-            # except:
-            #     print(torch.argmax())
-            #     print(candit_gt)
-            # # print("type: {}".format(type(candit_gt)))
-            # print("max: {}".format(candit_gt.max()))
-            # print("min: {}".format(candit_gt.min()))
 

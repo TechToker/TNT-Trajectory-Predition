@@ -43,7 +43,7 @@ class SubGraph(nn.Module):
         args:
             sub_data (Data): [x, y, cluster, edge_index, valid_len]
         """
-        x = sub_data.x
+        x = sub_data.x # get all node features from batch (how is it sorted by parent polyline ?)
         # TODO: WHY WE NEED TO USE CYCLE
         for name, layer in self.layer_seq.named_modules():
             if isinstance(layer, MLP):

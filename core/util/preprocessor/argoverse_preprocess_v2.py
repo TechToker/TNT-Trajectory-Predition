@@ -186,7 +186,7 @@ class ArgoversePreprocessor(Preprocessor):
 
         target_candidates = self.lane_points_sampling(centerline_candidates) #, viz=True)
 
-        # TODO: To understand why the specific behavior for the test split is specified?
+        # Because test labels not available
         if self.split == "test":
             target_candidates_onehot, target_offset_gt = np.zeros((target_candidates.shape[0], 1)), np.zeros((1, 2))
             centerline_splines, reference_centerline_idx = None, None
@@ -433,11 +433,11 @@ class ArgoversePreprocessor(Preprocessor):
         lane_idcs = data['graph']['lane_idcs']
 
         for i in np.unique(lane_idcs):
-            line_vectors_center = lines_vectors_centers[lane_idcs == i]
+            line_vectors_centers = lines_vectors_centers[lane_idcs == i]
             line_vectors = lines_vectors[lane_idcs == i]
 
-            line_str = (2.0 * line_vectors_center - line_vectors) / 2.0
-            line_end = (2.0 * line_vectors_center[-1, :] + line_vectors[-1, :]) / 2.0
+            line_str = (2.0 * line_vectors_centers - line_vectors) / 2.0
+            line_end = (2.0 * line_vectors_centers[-1, :] + line_vectors[-1, :]) / 2.0
 
             line = np.vstack([line_str, line_end.reshape(-1, 2)])
             visualize_centerline(line)
@@ -469,7 +469,6 @@ def ref_copy(data):
 
 
 # Generate a small subset to test the training program
-# TODO: Identify what the idea behind that script
 # Get all data from agroverse dataset
 # Get trajectories and centerlines
 # Transform trajectories/centerlines to local (target agent) frame
@@ -507,17 +506,21 @@ if __name__ == "__main__":
         #item = argoverse_processor[0]
 
         loader = DataLoader(argoverse_processor,
-                            batch_size=16,
+                            batch_size=1,
                             num_workers=1,
                             shuffle=False,
                             pin_memory=False,
                             drop_last=False)
 
         for i, data in enumerate(tqdm(loader)):
+
+            # if split == "test":
+            #     break
+
             if args.small:
-                if split == "train" and i >= 200:
+                if split == "train" and i >= 0:
                     break
-                elif split == "val" and i >= 50:
+                elif split == "val" and i >= 100:
                     break
-                elif split == "test" and i >= 50:
+                elif split == "test" and i >= 100:
                     break

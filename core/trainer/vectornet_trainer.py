@@ -1,10 +1,16 @@
+import time
+
 from tqdm import tqdm
 
+import wandb
 import torch
+import numpy as np
 import torch.nn as nn
 from torch.optim import Adam
 from torch_geometric.data import DataLoader
 from torch_geometric.nn import DataParallel
+
+import core.util.visualization as visual
 
 from core.trainer.trainer import Trainer
 from core.model.vectornet import VectorNet, OriginalVectorNet
@@ -149,6 +155,7 @@ class VectorNetTrainer(Trainer):
                         loss = self.model.loss(data.to(self.device))
                     else:
                         loss = self.model.loss(data.to(self.device))
+
                     self.write_log("Eval Loss", loss.item() / n_graph, i + epoch * len(dataloader))
 
             num_sample += n_graph
@@ -159,6 +166,7 @@ class VectorNetTrainer(Trainer):
                                                                                  epoch,
                                                                                  loss.item() / n_graph,
                                                                                  avg_loss / num_sample)
+
             data_iter.set_description(desc=desc_str, refresh=True)
 
         if training:
@@ -167,6 +175,30 @@ class VectorNetTrainer(Trainer):
 
         return avg_loss / num_sample
 
-    # todo: the inference of the model
-    def test(self, data):
-        raise NotImplementedError
+    def epoch_ending(self, train_loss, val_loss):
+        wandb.log({'Train loss': train_loss,
+                   'Val loss': val_loss,
+                   'Learning_rate': self.optim.param_groups[0]['lr'],
+                   })
+
+    def test(self):
+        # Visualization on map
+
+        # batch size must be = 1, otherwise we can't separate nodes by scenes
+        with torch.no_grad():
+            for data in tqdm(self.test_loader):
+
+                target_future_trajectory = data.y.numpy().reshape(-1, 2)
+                nodes = data.x.numpy()
+                cluster = data.cluster.numpy()
+
+                model_prediction = self.model.inference(data.to(self.device)).cpu().numpy().reshape(-1, 2)
+
+                polylines = []
+                for cluster_idc in np.unique(cluster):
+                    [indices] = np.where(cluster == cluster_idc)
+                    polyline = nodes[indices]
+
+                    polylines.append(polyline)
+
+                visual.draw_scene(polylines, target_future_trajectory, model_prediction)

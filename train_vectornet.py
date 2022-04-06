@@ -2,14 +2,43 @@ import os
 import sys
 from os.path import join as pjoin
 from datetime import datetime
+import torch
+import random
+import numpy as np
 
+import wandb
 import argparse
 
 from core.dataloader.argoverse_loader import Argoverse, GraphData
 from core.dataloader.argoverse_loader_v2 import ArgoverseInMem as ArgoverseInMemv2
+from core.dataloader.argoverse_loader_low_memory import ArgoverseCustom
 from core.trainer.vectornet_trainer import VectorNetTrainer
 
 sys.path.append("core/dataloader")
+
+
+def fix_random_seed():
+    magic_value = 42
+
+    torch.manual_seed(magic_value)
+    torch.cuda.manual_seed(magic_value)
+    torch.cuda.manual_seed_all(magic_value)
+
+    random.seed(magic_value)
+    np.random.seed(magic_value)
+
+    # This will slightly reduce performance of CUDA convolution
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+
+    # thats for dataloader reproducibility
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2 ** 32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    g = torch.Generator()
+    g.manual_seed(magic_value)
 
 
 def train(args):
@@ -18,8 +47,11 @@ def train(args):
     :param args:
     :return:
     """
-    train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")).shuffle()
-    eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
+    #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
+    #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
+
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 205942) #1632) # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 39472) # 352)  # 39472
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M")
@@ -52,14 +84,19 @@ def train(args):
         model_path=args.resume_model if hasattr(args, "resume_model") and args.resume_model else None
     )
 
+    wandb.init(project='VectorNet', entity='techtoker')
+    fix_random_seed()
+
     # resume minimum eval loss
     min_eval_loss = trainer.min_eval_loss
 
     # training
     for iter_epoch in range(args.n_epoch):
-        _ = trainer.train(iter_epoch)
+        train_loss = trainer.train(iter_epoch)
 
         eval_loss = trainer.eval(iter_epoch)
+
+        trainer.epoch_ending(train_loss, eval_loss)
 
         if not min_eval_loss:
             min_eval_loss = eval_loss
@@ -75,7 +112,7 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small",
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data",
                         help="root dir for datasets")
     parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/vectornet/",
                         help="ex)dir to save checkpoint and model")
@@ -89,7 +126,7 @@ if __name__ == "__main__":
                         help="number of batch_size")
     parser.add_argument("-e", "--n_epoch", type=int, default=50,
                         help="number of epochs")
-    parser.add_argument("-w", "--num_workers", type=int, default=16,
+    parser.add_argument("-w", "--num_workers", type=int, default=1, # 16,
                         help="dataloader worker size")
 
     parser.add_argument("-c", "--with_cuda", action="store_true", default=True,

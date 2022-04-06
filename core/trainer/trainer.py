@@ -4,8 +4,11 @@ import os
 from tqdm import tqdm
 
 import json
-
 import torch
+
+import wandb
+import random
+import numpy as np
 
 # from torch.utils.data import DataLoader,
 from torch.utils.tensorboard import SummaryWriter
@@ -50,6 +53,9 @@ class Trainer(object):
         :param log_freq: logging frequency in epoch
         :param verbose: whether printing debug messages
         """
+
+        self.fix_random_seed()
+
         # determine cuda device id
         self.cuda_id = cuda_device if with_cuda and cuda_device else [0]
         self.device = torch.device("cuda:{}".format(self.cuda_id[0]) if torch.cuda.is_available() and with_cuda else "cpu")
@@ -102,6 +108,29 @@ class Trainer(object):
 
         gc.enable()
 
+    @staticmethod
+    def fix_random_seed():
+        magic_value = 42
+
+        torch.manual_seed(magic_value)
+        torch.cuda.manual_seed(magic_value)
+
+        random.seed(magic_value)
+        np.random.seed(magic_value)
+
+        # This will slightly reduce performance of CUDA convolution
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+
+        # thats for dataloader reproducibility
+        def seed_worker(worker_id):
+            worker_seed = torch.initial_seed() % 2 ** 32
+            np.random.seed(worker_seed)
+            random.seed(worker_seed)
+
+        g = torch.Generator()
+        g.manual_seed(magic_value)
+
     def train(self, epoch):
         gc.collect()
 
@@ -114,8 +143,11 @@ class Trainer(object):
         self.model.eval()
         return self.iteration(epoch, self.eval_loader)
 
-    def test(self):
+    def epoch_ending(self, train_loss, val_loss):
         raise NotImplementedError
+
+    def test(self):
+        self.model.eval()
 
     def iteration(self, epoch, dataloader):
         raise NotImplementedError

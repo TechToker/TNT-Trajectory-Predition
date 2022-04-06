@@ -71,9 +71,10 @@ class VectorNetBackbone(nn.Module):
 
         id_embedding = data.identifier
 
-        sub_graph_out = self.subgraph(data)
+        sub_graph_out = self.subgraph(data) # get features for each polyline
 
         if self.training and self.with_aux:
+            # select by random which polyline we will mask
             randoms = 1 + torch.rand((batch_size,), device=self.device) * (valid_lens - 2) + \
                       time_step_len * torch.arange(batch_size, device=self.device)
 
@@ -83,7 +84,7 @@ class VectorNetBackbone(nn.Module):
             aux_gt = sub_graph_out[mask_polyline_indices]
             sub_graph_out[mask_polyline_indices] = 0.0
 
-        # reconstruct the batch global interaction graph data # TODO: Why we concat it with embedding
+        # reconstruct the batch global interaction graph data
         x = torch.cat([sub_graph_out, id_embedding], dim=1).view(batch_size, -1, self.subgraph.out_channels + 2)
         valid_lens = data.valid_len
 
