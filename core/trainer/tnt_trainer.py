@@ -233,6 +233,9 @@ class TNTTrainer(Trainer):
 
         with torch.no_grad():
             for data in tqdm(self.test_loader):
+
+                print(data)
+
                 batch_size = data.num_graphs
                 gt = data.y.unsqueeze(1).view(batch_size, -1, 2).cumsum(axis=1).numpy()
                 origs = data.orig.numpy()

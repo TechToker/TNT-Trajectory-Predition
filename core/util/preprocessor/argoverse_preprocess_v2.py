@@ -76,7 +76,7 @@ class ArgoversePreprocessor(Preprocessor):
         data['seq_id'] = seq_id
 
         # visualization for debug purpose
-        self.visualize_data(data)
+        #self.visualize_data(data)
 
         # Convert from dictionary to dataframe
         result = pd.DataFrame([[data[key] for key in data.keys()]], columns=[key for key in data.keys()])
@@ -518,7 +518,7 @@ if __name__ == "__main__":
             #     break
 
             if args.small:
-                if split == "train" and i >= 0:
+                if split == "train" and i >= 250:
                     break
                 elif split == "val" and i >= 100:
                     break

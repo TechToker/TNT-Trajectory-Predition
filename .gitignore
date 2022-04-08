@@ -6,3 +6,4 @@ __pycache__/
 **/run/
 **/test_result/
 **/wandb/
+core/util/tnt_data_sample.pt

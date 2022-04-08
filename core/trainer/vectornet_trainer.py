@@ -192,6 +192,8 @@ class VectorNetTrainer(Trainer):
                 nodes = data.x.numpy()
                 cluster = data.cluster.numpy()
 
+                print(self.model.modules)
+
                 model_prediction = self.model.inference(data.to(self.device)).cpu().numpy().reshape(-1, 2)
 
                 polylines = []

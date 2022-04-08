@@ -10,7 +10,7 @@ from torch_geometric.data import DataLoader
 
 from core.dataloader.dataset import GraphDataset
 # from core.dataloader.argoverse_loader import Argoverse, GraphData, ArgoverseInMem
-from core.dataloader.argoverse_loader_v2 import GraphData, ArgoverseInMem
+from core.dataloader.argoverse_loader_low_memory import GraphData, ArgoverseCustom
 from core.trainer.tnt_trainer import TNTTrainer
 
 sys.path.append("core/dataloader")
@@ -32,7 +32,8 @@ def test(args):
 
     # data loading
     try:
-        test_set = ArgoverseInMem(pjoin(args.data_root, "{}_intermediate".format(args.split)))
+        amount_of_files = 1
+        test_set = ArgoverseCustom(pjoin(args.data_root, "{}_intermediate".format(args.split)), amount_of_files)
     except:
         raise Exception("Failed to load the data, please check the dataset!")
 
@@ -75,7 +76,7 @@ if __name__ == "__main__":
                         # default="/home/jb/projects/Code/trajectory-prediction/TNT-Trajectory-Predition/run/tnt/05-21-07-33/checkpoint_iter26.ckpt",
                         help="resume a checkpoint for fine-tune")
     parser.add_argument("-rm", "--resume_model", type=str,
-                        # default="/home/jb/projects/Code/trajectory-prediction/TNT-Trajectory-Predition/run/tnt/01-22-18-55/best_TNT.pth",
+                        default="run/tnt/04-06-17-45/final_TNT.pth",
                         help="resume a model state for fine-tune")
 
     parser.add_argument("-dd", "--save_dir", type=str, default="test_result")

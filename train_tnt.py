@@ -6,7 +6,7 @@ from datetime import datetime
 import argparse
 
 from core.dataloader.argoverse_loader import Argoverse, GraphData, ArgoverseInMem
-from core.dataloader.argoverse_loader_v2 import ArgoverseInMem as ArgoverseInMemv2
+from core.dataloader.argoverse_loader_low_memory import ArgoverseCustom
 from core.trainer.tnt_trainer import TNTTrainer
 
 sys.path.append("core/dataloader")
@@ -22,8 +22,8 @@ def train(args):
     print('Start dataset init')
     print()
 
-    train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")).shuffle()
-    eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 252) #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 102)
 
     print('Success dataset init')
     print()
@@ -92,7 +92,7 @@ if __name__ == "__main__":
     # parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/tnt/",
     #                     help="ex)dir to save checkpoint and model")
 
-    parser.add_argument("-o", "--output_dir", required=False, type=str, default="r/home/techtoker/projects/TNT-Trajectory-Predition/run/tnt/",
+    parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/tnt/",
                         help="ex)dir to save checkpoint and model")
 
     parser.add_argument("-l", "--num_glayer", type=int, default=1,
@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-b", "--batch_size", type=int, default=64,
                         help="number of batch_size")
-    parser.add_argument("-e", "--n_epoch", type=int, default=8, #50,
+    parser.add_argument("-e", "--n_epoch", type=int, default=1, #50,
                         help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=16,
                         help="dataloader worker size")
