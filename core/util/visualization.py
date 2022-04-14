@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -18,6 +20,9 @@ def is_trajectory_polyline(polyline):
 
 def draw_line(plt, line_vectors_centers, line_vectors):
     color = 'gray'
+
+    color = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
+
     line_str = (2.0 * line_vectors_centers - line_vectors) / 2.0
     line_end = (2.0 * line_vectors_centers[-1, :] + line_vectors[-1, :]) / 2.0
     line = np.vstack([line_str, line_end.reshape(-1, 2)])

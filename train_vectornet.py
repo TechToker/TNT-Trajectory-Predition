@@ -11,7 +11,7 @@ import argparse
 
 from core.dataloader.argoverse_loader import Argoverse, GraphData
 from core.dataloader.argoverse_loader_v2 import ArgoverseInMem as ArgoverseInMemv2
-from core.dataloader.argoverse_loader_low_memory import ArgoverseCustom
+from core.dataloader.argoverse_loader_low_memory import ArgoverseCustom, GRAPH_TYPE
 from core.trainer.vectornet_trainer import VectorNetTrainer
 
 sys.path.append("core/dataloader")
@@ -50,8 +50,8 @@ def train(args):
     #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
     #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
 
-    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 205942) #1632) # 205942 #.shuffle()
-    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 39472) # 352)  # 39472
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 252, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 102, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M")
@@ -112,7 +112,7 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data",
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small_drivarea",
                         help="root dir for datasets")
     parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/vectornet/",
                         help="ex)dir to save checkpoint and model")

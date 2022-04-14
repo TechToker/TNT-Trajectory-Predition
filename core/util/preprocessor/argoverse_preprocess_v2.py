@@ -9,13 +9,14 @@ import copy
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, patches
 from scipy import sparse
 
 import warnings
 
 # import torch
 from torch.utils.data import Dataset, DataLoader
+import random
 
 from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 from argoverse.map_representation.map_api import ArgoverseMap
@@ -72,7 +73,9 @@ class ArgoversePreprocessor(Preprocessor):
         data = self.read_argo_data(dataframe)
         data = self.get_obj_feats(data)
 
-        data['graph'] = self.get_lane_graph(data)
+        #data['graph'] = self.get_lane_graph(data)
+        data['graph'] = self.get_drivable_area_graph(data)
+
         data['seq_id'] = seq_id
 
         # visualization for debug purpose
@@ -305,12 +308,173 @@ class ArgoversePreprocessor(Preprocessor):
 
         return data
 
+    def draw_drivable_area(self, lane_polygons, query_min_x, query_max_x, query_min_y, query_max_y):
+
+        fig = plt.figure(figsize=(10, 10))
+        ax = fig.add_subplot(111)
+
+        #ax.scatter(xcenter, ycenter, 200, color="g", marker=".", zorder=2)
+        ax.set_xlim([query_min_x, query_max_x])
+        ax.set_ylim([query_min_y, query_max_y])
+
+        for i, polygon in enumerate(lane_polygons):
+            color = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
+            ax.plot(polygon[:, 0], polygon[:, 1], color=color, alpha=1, zorder=1)
+
+        ax = plt.gca()
+        ax.add_patch(patches.Rectangle((-100, -100), 200, 200, edgecolor='red',
+                                       facecolor='none', linewidth=2))
+
+        #ax.axis('equals')
+        plt.show()
+
+    def get_points_inside_roi_mask(self, polygon, x_min, x_max, y_min, y_max):
+        mask_points_inside_of_roi = np.array([x_min < point[0] < x_max and y_min < point[1] < y_max for point in polygon])
+        upd_mask_points_inside_of_roi = copy.deepcopy(mask_points_inside_of_roi)
+
+        is_next_neighbor_set = False # hack to prevent endless setting true to next neighbors during forward pass
+
+        # True for points inside roi and its neighbors
+        for idx, is_inside_roi in enumerate(mask_points_inside_of_roi):
+
+            next_index = (idx + 1) % len(mask_points_inside_of_roi)
+            prev_index = (idx - 1 + len(mask_points_inside_of_roi)) % len(mask_points_inside_of_roi)
+
+            if mask_points_inside_of_roi[idx] and not mask_points_inside_of_roi[prev_index]:
+                upd_mask_points_inside_of_roi[prev_index] = True
+
+            if mask_points_inside_of_roi[idx] and not mask_points_inside_of_roi[next_index] and not is_next_neighbor_set:
+                upd_mask_points_inside_of_roi[next_index] = True
+                is_next_neighbor_set = True
+            else:
+                is_next_neighbor_set = False
+
+        return upd_mask_points_inside_of_roi
+
+    def filtering_points_outside_roi(self, data, drivable_areas_polygons, x_min, x_max, y_min, y_max):
+        # find_local_driveable_areas method don't filtered all points outside roi
+
+        drivable_area_boundaries = []  # boundaries - polygon segments
+
+        for polygon in drivable_areas_polygons:
+            polygon = polygon[:, :2]  # remove info about height
+            rotated_polygon = np.matmul(data['rotation_matrix'], (polygon - data['origin_pos'].reshape(-1, 2)).T).T
+
+            mask_points_inside_of_roi = self.get_points_inside_roi_mask(rotated_polygon, x_min, x_max, y_min, y_max)
+
+            polygon_segments = []
+            current_segment_points = []
+
+            for idx, point in enumerate(rotated_polygon):
+                if mask_points_inside_of_roi[idx]:
+                    current_segment_points.append(point)
+                else:
+                    if len(current_segment_points) > 0:
+                        polygon_segments.append(copy.deepcopy(current_segment_points))
+                        current_segment_points.clear()
+
+            # add last segment
+            if len(current_segment_points) > 0:
+                polygon_segments.append(current_segment_points)
+
+            # combine start and end of the polygon
+            if mask_points_inside_of_roi[0] and mask_points_inside_of_roi[-1]:
+                # if polygon is divided into several parts and first and last point inside roi
+                # => combine start and the end segments together
+                if len(polygon_segments) > 1:
+                    combined_boundary = np.concatenate([copy.deepcopy(polygon_segments[-1]), polygon_segments[0]])
+                    polygon_segments[0] = combined_boundary
+                    del polygon_segments[-1]
+                # if polygon segment is the whole polygon => connect start and end point of polygon together
+                # to show that is closed polygon
+                elif len(polygon_segments) == 1:
+                    polygon_segments[0].append(rotated_polygon[0])
+
+            if len(polygon_segments) > 0:
+                for segment in polygon_segments:
+                    drivable_area_boundaries.append(np.array(segment))
+
+        return np.array(drivable_area_boundaries)
+
+    def get_drivable_area_graph(self, data):
+        """Get a rectangle area defined by pred_range."""
+        x_min, x_max, y_min, y_max = -self.obs_range, self.obs_range, -self.obs_range, self.obs_range
+        radius = max(abs(x_min), abs(x_max)) + max(abs(y_min), abs(y_max))
+
+        query_search_range_manhattan = 100 # = radius
+        city = data['city']
+
+        # Override default position
+        # city = 'PIT'
+        # query_x = 2595
+        # query_y = 1205
+        # data['origin_pos'][0] = query_x
+        # data['origin_pos'][1] = query_y
+
+        query_x = data['origin_pos'][0]
+        query_y = data['origin_pos'][1]
+
+        query_min_x = query_x - query_search_range_manhattan
+        query_max_x = query_x + query_search_range_manhattan
+        query_min_y = query_y - query_search_range_manhattan
+        query_max_y = query_y + query_search_range_manhattan
+
+        drivable_areas_boundaries = self.am.find_local_driveable_areas([query_min_x, query_max_x, query_min_y, query_max_y], city)
+        drivable_areas_boundaries = copy.deepcopy(drivable_areas_boundaries)
+
+        # Draw whole drivable area to debug
+        # self.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y)
+        #
+        # # TODO: Show rotated map
+        # rotated_drivable_areas_boundaries = []
+        # for da_boundary in drivable_areas_boundaries:
+        #     da_boundary = da_boundary[:, :2]  # remove info about height
+        #
+        #     rotated_boundary = np.matmul(data['rotation_matrix'], (da_boundary - data['origin_pos'].reshape(-1, 2)).T).T
+        #     rotated_drivable_areas_boundaries.append(rotated_boundary)
+        # rotated_drivable_areas_boundaries = np.array(rotated_drivable_areas_boundaries)
+        # self.draw_drivable_area(rotated_drivable_areas_boundaries, x_min, x_max, y_min, y_max)
+
+        drivable_area_polygons = self.filtering_points_outside_roi(data, drivable_areas_boundaries, x_min, x_max, y_min, y_max)
+
+        # Draw filtered drivable area
+        #self.draw_drivable_area(drivable_area_polygons, x_min, x_max, y_min, y_max)
+
+        boundary_vectors_centers, boundary_vectors = [], []
+        for polygon_segment in drivable_area_polygons:
+            # array of center points (between points of centerline)
+            centers = np.asarray((polygon_segment[:-1] + polygon_segment[1:]) / 2.0, np.float32)
+            boundary_vectors_centers.append(centers)
+
+            # Vectors that make up the line (displacements)
+            vectors = np.asarray(polygon_segment[1:] - polygon_segment[:-1], np.float32)
+            boundary_vectors.append(vectors)
+
+        lane_idcs = []
+        count = 0
+        for i, ctr in enumerate(boundary_vectors_centers):
+            lane_idcs.append(i * np.ones(len(ctr), np.int64))
+            count += len(ctr)
+        num_nodes = count
+
+        graph = dict()
+        graph['lane_idcs'] = np.concatenate(lane_idcs, 0)
+        graph['num_nodes'] = num_nodes
+
+        graph['centers'] = np.concatenate(boundary_vectors_centers, 0)
+        graph['lines_vectors'] = np.concatenate(boundary_vectors, 0)
+
+        return graph
+
     def get_lane_graph(self, data):
         """Get a rectangle area defined by pred_range."""
         x_min, x_max, y_min, y_max = -self.obs_range, self.obs_range, -self.obs_range, self.obs_range
         radius = max(abs(x_min), abs(x_max)) + max(abs(y_min), abs(y_max))
 
-        lane_ids_in_roi = self.am.get_lane_ids_in_xy_bbox(data['origin_pos'][0], data['origin_pos'][1], data['city'], radius * 1.5)
+        query_search_range_manhattan = radius * 1.5
+        query_x, query_y = data['origin_pos'][:2]
+
+        lane_ids_in_roi = self.am.get_lane_ids_in_xy_bbox(query_x, query_y, data['city'], query_search_range_manhattan)
         lane_ids_in_roi = copy.deepcopy(lane_ids_in_roi)
 
         lanes = dict()  # dictionary of <lane_id, lane segment>
@@ -321,7 +485,7 @@ class ArgoversePreprocessor(Preprocessor):
             centerline = np.matmul(data['rotation_matrix'], (lane.centerline - data['origin_pos'].reshape(-1, 2)).T).T
             x, y = centerline[:, 0], centerline[:, 1]
 
-            # if some point of the line outside roi
+            # if the whole line outside roi
             if x.max() < x_min or x.min() > x_max or y.max() < y_min or y.min() > y_max:
                 continue
             else:
@@ -376,6 +540,7 @@ class ArgoversePreprocessor(Preprocessor):
 
         graph['centers'] = np.concatenate(lines_vectors_centers, 0)
         graph['lines_vectors'] = np.concatenate(lines_vectors, 0)
+
         graph['lines_turn_info'] = np.concatenate(lines_turn_info, 0)
         graph['lines_traffic_control_info'] = np.concatenate(lines_traffic_control_info, 0)
         graph['lines_intersect_info'] = np.concatenate(lines_intersect_info, 0)
@@ -451,9 +616,16 @@ class ArgoversePreprocessor(Preprocessor):
         for i, [traj, has_obs, pred, has_pred] in reversed(list(enumerate(zip(trajs, has_obss, preds, has_preds)))):
             self.plot_traj(traj[has_obs], pred[has_pred], i)
 
-        plt.xlabel("Map X")
-        plt.ylabel("Map Y")
-        plt.axis("off")
+
+        ax = plt.gca()
+        ax.add_patch(patches.Rectangle((-100, -100), 200, 200, edgecolor='red',
+                                       facecolor='none', linewidth=2))
+        #plt.xlabel("Map X")
+        #plt.ylabel("Map Y")
+        #plt.axis("equals")
+        plt.xlim(-100, 100)
+        plt.ylim(-100, 100)
+
         plt.show()
 
 
@@ -491,7 +663,7 @@ if __name__ == "__main__":
     print()
 
     raw_dir = os.path.join(args.root, "raw_data")
-    interm_dir = os.path.join(args.dest, "interm_data" if not args.small else "interm_data_small")
+    interm_dir = os.path.join(args.dest, "interm_data_drivarea" if not args.small else "interm_data_small_drivarea")
 
     print(raw_dir, interm_dir)
     print()
@@ -502,8 +674,6 @@ if __name__ == "__main__":
         print(raw_dir)
         print()
         argoverse_processor = ArgoversePreprocessor(root_dir=raw_dir, split=split, save_dir=interm_dir)
-
-        #item = argoverse_processor[0]
 
         loader = DataLoader(argoverse_processor,
                             batch_size=1,

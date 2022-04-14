@@ -9,6 +9,8 @@ import os
 import os.path as osp
 from copy import deepcopy, copy
 
+from enum import Enum
+
 import torch
 from torch_geometric.data import Data, Dataset, download_url
 
@@ -54,15 +56,19 @@ class GraphData(Data):
 # %%
 
 
-class ArgoverseCustom(Dataset):
-    def __init__(self, root, amount_processed_files, transform=None, pre_transform=None, pre_filter=None):
+class GRAPH_TYPE(Enum):
+    LINES = 1
+    DRIVABLE_AREA = 2
 
-        # for train 205942 or 1632; for valid 352
+
+class ArgoverseCustom(Dataset):
+    def __init__(self, root, amount_processed_files, graph_type=GRAPH_TYPE.DRIVABLE_AREA, transform=None, pre_transform=None, pre_filter=None):
         self.processed_files = []
         for idx in range(amount_processed_files):
             self.processed_files.append(f'data_{idx}.pt')
 
         self.processed_files_len = len(self.processed_file_names)
+        self.graph_type = graph_type
 
         super().__init__(root, transform, pre_transform, pre_filter)
 
@@ -143,11 +149,7 @@ class ArgoverseCustom(Dataset):
         return self.processed_files_len
 
     def get(self, idx):
-        #start_time = time.time()
         data = torch.load(osp.join(self.processed_dir, f'data_{idx}.pt'))
-
-        # print(f'Load time : {time.time() - start_time}')
-        # start_postproc = time.time()
 
         feature_len = data.x.shape[1] # get amount of features per node
         index_to_pad = data.time_step_len[0].item() # get maximum of amount of polyline on scene
@@ -165,15 +167,10 @@ class ArgoverseCustom(Dataset):
         data.candidate = torch.cat([data.candidate, torch.zeros((num_cand_max - len(data.candidate), 2))])
         data.candidate_gt = torch.cat([data.candidate_gt, torch.zeros((num_cand_max - len(data.candidate_gt), 1))])
 
-        # self.total_time += (time.time() - start_time)
-        # self.amount_operations += 1
-        #
-        # print(f'avg time: {self.total_time / self.amount_operations}')
-
         return data
 
-    @staticmethod
-    def _get_x(data_seq):
+
+    def _get_x(self, data_seq):
         """
         feat: [xs, ys, vec_x, vec_y, step(timestamp), traffic_control, turn, is_intersection, polyline_id];
         xs, ys: the control point of the vector, for trajectory, it's start point, for lane segment, it's the center point;
@@ -186,7 +183,9 @@ class ArgoverseCustom(Dataset):
 
         identifier: # vstask of min_x and min_y position for every trajectory or line # TODO: Why separately
         """
-        feats = np.empty((0, 10))
+        amount_of_node_features = 6 if self.graph_type == GRAPH_TYPE.DRIVABLE_AREA else 10
+        feats = np.empty((0, amount_of_node_features))
+
         edge_index = np.empty((2, 0), dtype=np.int64)
         identifier = np.empty((0, 2))
 
@@ -203,28 +202,36 @@ class ArgoverseCustom(Dataset):
             xy_s = feat[has_obs][:-1, :2] # remove last element from trajectory history, get only x, y cords
             vec = feat[has_obs][1:, :2] - feat[has_obs][:-1, :2] # length from point to point of trajectory
 
-            # for trajectory traffic/intersect/turn equals 0
-            traffic_ctrl = np.zeros((len(xy_s), 1))
-            is_intersect = np.zeros((len(xy_s), 1))
-            is_turn = np.zeros((len(xy_s), 2))
-
             polyline_id = np.ones((len(xy_s), 1)) * traj_cnt
-            feats = np.vstack([feats, np.hstack([xy_s, vec, step[has_obs][:-1], traffic_ctrl, is_turn, is_intersect, polyline_id])])
+
+            if self.graph_type == GRAPH_TYPE.DRIVABLE_AREA:
+                feats = np.vstack([feats, np.hstack([xy_s, vec, step[has_obs][:-1], polyline_id])])
+            else:
+                traffic_ctrl = np.zeros((len(xy_s), 1))  # for trajectory traffic/intersect/turn equals 0
+                is_intersect = np.zeros((len(xy_s), 1))
+                is_turn = np.zeros((len(xy_s), 2))
+
+                feats = np.vstack([feats, np.hstack([xy_s, vec, step[has_obs][:-1], traffic_ctrl, is_turn, is_intersect, polyline_id])])
+
             traj_cnt += 1
 
         # get lane features
         graph = data_seq['graph'].values[0]
-        ctrs = graph['centers']
-        vec = graph['lines_vectors']
-        traffic_ctrl = graph['lines_traffic_control_info'].reshape(-1, 1)
-        is_turns = graph['lines_turn_info']
-        is_intersect = graph['lines_intersect_info'].reshape(-1, 1)
         lane_idcs = graph['lane_idcs'].reshape(-1, 1) + traj_cnt
-
         steps = np.zeros((len(lane_idcs), 1))
 
+        ctrs = graph['centers']
+        vec = graph['lines_vectors']
+
         # vstack lines info to trajectory info
-        feats = np.vstack([feats, np.hstack([ctrs, vec, steps, traffic_ctrl, is_turns, is_intersect, lane_idcs])])
+        if self.graph_type == GRAPH_TYPE.DRIVABLE_AREA:
+            feats = np.vstack([feats, np.hstack([ctrs, vec, steps, lane_idcs])])
+        else:
+            traffic_ctrl = graph['lines_traffic_control_info'].reshape(-1, 1)
+            is_turns = graph['lines_turn_info']
+            is_intersect = graph['lines_intersect_info'].reshape(-1, 1)
+
+            feats = np.vstack([feats, np.hstack([ctrs, vec, steps, traffic_ctrl, is_turns, is_intersect, lane_idcs])])
 
         # get the cluster and construct subgraph edge_index
         cluster = copy(feats[:, -1].astype(np.int64)) # copy of last column of feats (with id)
