@@ -654,7 +654,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-r", "--root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/")
     parser.add_argument("-d", "--dest", type=str, default="dataset")
-    parser.add_argument("-s", "--small", action='store_true', default=True)
+    parser.add_argument("-s", "--small", action='store_true', default=False)
 
     args = parser.parse_args()
 

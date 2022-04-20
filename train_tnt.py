@@ -65,9 +65,13 @@ def train(args):
 
     # training
     for iter_epoch in range(args.n_epoch):
-        _ = trainer.train(iter_epoch)
+        train_loss = trainer.train(iter_epoch)
 
         eval_loss = trainer.eval(iter_epoch)
+
+        # compute the metrics and save
+        metric = trainer.compute_metric()
+        trainer.epoch_ending(train_loss, eval_loss, metric)
 
         if not min_eval_loss:
             min_eval_loss = eval_loss
@@ -76,9 +80,9 @@ def train(args):
             min_eval_loss = eval_loss
 
             trainer.save(iter_epoch, min_eval_loss)
-            trainer.save_model("best")
+            trainer.save_model(metric, "best")
 
-    trainer.save_model("final")
+    trainer.save_model(None, "final")
 
 
 if __name__ == "__main__":

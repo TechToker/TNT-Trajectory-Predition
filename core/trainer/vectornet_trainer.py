@@ -175,10 +175,13 @@ class VectorNetTrainer(Trainer):
 
         return avg_loss / num_sample
 
-    def epoch_ending(self, train_loss, val_loss):
+    def epoch_ending(self, train_loss, val_loss, metric):
         wandb.log({'Train loss': train_loss,
                    'Val loss': val_loss,
                    'Learning_rate': self.optim.param_groups[0]['lr'],
+                   'MinADE': metric["minADE"],
+                   'MinFDE': metric["minFDE"],
+                   'MR': metric["MR"],
                    })
 
     def test(self):

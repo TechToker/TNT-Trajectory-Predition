@@ -179,7 +179,7 @@ class Trainer(object):
         if self.verbose:
             print("[Trainer]: Saving checkpoint to {}...".format(self.save_folder))
 
-    def save_model(self, prefix=""):
+    def save_model(self, metric, prefix=""):
         """
         save current state of the model
         :param prefix: str, the prefix to the model file
@@ -187,9 +187,6 @@ class Trainer(object):
         """
         if not os.path.exists(self.save_folder):
             os.makedirs(self.save_folder, exist_ok=True)
-
-        # compute the metrics and save
-        metric = self.compute_metric()
 
         # skip model saving if the minADE is not better
         if self.best_metric and isinstance(metric, dict):

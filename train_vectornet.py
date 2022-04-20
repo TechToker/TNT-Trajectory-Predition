@@ -50,8 +50,8 @@ def train(args):
     #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
     #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
 
-    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 252, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
-    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 102, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 251, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 101, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M")
@@ -96,7 +96,9 @@ def train(args):
 
         eval_loss = trainer.eval(iter_epoch)
 
-        trainer.epoch_ending(train_loss, eval_loss)
+        # compute the metrics and save
+        metric = trainer.compute_metric()
+        trainer.epoch_ending(train_loss, eval_loss, metric)
 
         if not min_eval_loss:
             min_eval_loss = eval_loss
@@ -104,15 +106,15 @@ def train(args):
             # save the model when a lower eval_loss is found
             min_eval_loss = eval_loss
             trainer.save(iter_epoch, min_eval_loss)
-            trainer.save_model("best")
+            trainer.save_model(metric, "best")
 
-    trainer.save_model("final")
+    trainer.save_model(None, "final")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small_drivarea",
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_drivarea",
                         help="root dir for datasets")
     parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/vectornet/",
                         help="ex)dir to save checkpoint and model")
@@ -126,7 +128,7 @@ if __name__ == "__main__":
                         help="number of batch_size")
     parser.add_argument("-e", "--n_epoch", type=int, default=50,
                         help="number of epochs")
-    parser.add_argument("-w", "--num_workers", type=int, default=1, # 16,
+    parser.add_argument("-w", "--num_workers", type=int, default=16, # 16,
                         help="dataloader worker size")
 
     parser.add_argument("-c", "--with_cuda", action="store_true", default=True,
@@ -137,12 +139,12 @@ if __name__ == "__main__":
                         help="printing loss every n iter: setting n")
     parser.add_argument("--on_memory", type=bool, default=True, help="Loading on memory: true or false")
 
-    parser.add_argument("--lr", type=float, default=1e-3, help="learning rate of adam")
-    parser.add_argument("-we", "--warmup_epoch", type=int, default=20,
+    parser.add_argument("--lr", type=float, default=3e-4, help="learning rate of adam")
+    parser.add_argument("-we", "--warmup_epoch", type=int, default=10,
                         help="The epoch to start the learning rate decay")
     parser.add_argument("-luf", "--lr_update_freq", type=int, default=5,
                         help="learning rate decay frequency for lr scheduler")
-    parser.add_argument("-ldr", "--lr_decay_rate", type=float, default=0.9, help="lr scheduler decay rate")
+    parser.add_argument("-ldr", "--lr_decay_rate", type=float, default=0.8, help="lr scheduler decay rate")
     parser.add_argument("--adam_weight_decay", type=float, default=0.01, help="weight_decay of adam")
     parser.add_argument("--adam_beta1", type=float, default=0.9, help="adam first beta value")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")

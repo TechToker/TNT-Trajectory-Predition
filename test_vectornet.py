@@ -58,7 +58,7 @@ def test(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_small",
+    parser.add_argument("-d", "--data_root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_drivarea",
                         help="root dir for datasets")
     parser.add_argument("-s", "--split", type=str, default="val")
 
@@ -72,7 +72,8 @@ if __name__ == "__main__":
                         help="CUDA device ids")
 
     parser.add_argument("-rc", "--resume_checkpoint", type=str,
-                        default="/home/techtoker/projects/TNT-Trajectory-Predition/run/vectornet/04-03-15-19/checkpoint_iter40.ckpt",
+                        default="/home/techtoker/projects/TNT-Trajectory-Predition/run/vectornet/04-15-08-37/checkpoint_iter38.ckpt",
+                        #default="/home/techtoker/projects/TNT-Trajectory-Predition/run/vectornet/04-03-15-19/checkpoint_iter40.ckpt",
                         help="resume a checkpoint for fine-tune")
     parser.add_argument("-rm", "--resume_model", type=str,
                         # default="/home/jb/projects/Code/trajectory-prediction/TNT-Trajectory-Predition/run/tnt/01-22-18-55/best_TNT.pth",
