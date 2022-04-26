@@ -18,6 +18,9 @@ sys.path.append("core/dataloader")
 
 
 def fix_random_seed():
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+    torch.use_deterministic_algorithms(True)
+
     magic_value = 42
 
     torch.manual_seed(magic_value)
@@ -47,11 +50,14 @@ def train(args):
     :param args:
     :return:
     """
+
+    fix_random_seed()
+
     #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
     #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
 
-    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 251, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
-    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 101, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 205942, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 39472, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M")
@@ -85,7 +91,6 @@ def train(args):
     )
 
     wandb.init(project='VectorNet', entity='techtoker')
-    fix_random_seed()
 
     # resume minimum eval loss
     min_eval_loss = trainer.min_eval_loss
@@ -93,6 +98,10 @@ def train(args):
     # training
     for iter_epoch in range(args.n_epoch):
         train_loss = trainer.train(iter_epoch)
+        # print(f't_loss: {train_loss}')
+        #
+        # # if iter_epoch == 0:
+        # #     break
 
         eval_loss = trainer.eval(iter_epoch)
 
@@ -124,7 +133,7 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--aux_loss", action="store_true", default=True,
                         help="Training with the auxiliary recovery loss")
 
-    parser.add_argument("-b", "--batch_size", type=int, default=64,
+    parser.add_argument("-b", "--batch_size", type=int, default=64, #64,
                         help="number of batch_size")
     parser.add_argument("-e", "--n_epoch", type=int, default=50,
                         help="number of epochs")

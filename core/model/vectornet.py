@@ -5,6 +5,7 @@
 # Modification: Add auxiliary layer and loss
 
 import os
+import copy
 import random
 from tqdm import tqdm
 
@@ -21,6 +22,7 @@ from core.dataloader.dataset import GraphDataset, GraphData
 from core.model.layers.basic_module import MLP
 from core.model.backbone.vectornet_v2 import VectorNetBackbone
 from core.loss import VectorLoss
+from core.drivable_area_loss import DrivableAreaLoss
 from core.dataloader.argoverse_loader import Argoverse
 
 from core.dataloader.argoverse_loader_v2 import GraphData, ArgoverseInMem
@@ -51,7 +53,9 @@ class VectorNet(nn.Module):
         self.k = 1
 
         self.device = device
+
         self.criterion = VectorLoss(with_aux)
+        self.test_criterion = DrivableAreaLoss()
 
         # subgraph feature extractor
         self.backbone = VectorNetBackbone(
@@ -91,6 +95,30 @@ class VectorNet(nn.Module):
         y = data.y.view(-1, self.out_channels * self.horizon)
 
         return self.criterion(pred, y, aux_out, aux_gt)
+
+    def loss_override_test(self, data):
+        global_feat, aux_out, aux_gt = self.backbone(data)
+        target_feat = global_feat[:, 0]
+
+        pred = self.traj_pred_mlp(target_feat)
+        y = data.y.view(-1, self.out_channels * self.horizon)
+
+        # copy y and make some changes
+        # pred = copy.deepcopy(y)
+        # for i, point in enumerate(pred[0]):
+        #     if i % 2 == 0:
+        #         pred[0][i] = pred[0][i] - i * 0.01 # -0.7
+        #     # else:
+        #     #     pred[i] = 1.22
+
+        mse_loss = self.criterion(pred, y)
+        #print(f'MSE loss: {mse_loss}')
+
+        da_loss = self.test_criterion(data, pred, y)
+
+        #print(f'DA loss: {da_loss}')
+
+        return mse_loss + da_loss
 
     def inference(self, data):
         return self.forward(data)

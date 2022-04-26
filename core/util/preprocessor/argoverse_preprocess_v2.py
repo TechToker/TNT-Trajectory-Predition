@@ -11,6 +11,7 @@ import pandas as pd
 from tqdm import tqdm
 from matplotlib import pyplot as plt, patches
 from scipy import sparse
+import core.util.visualization as visual
 
 import warnings
 
@@ -79,7 +80,7 @@ class ArgoversePreprocessor(Preprocessor):
         data['seq_id'] = seq_id
 
         # visualization for debug purpose
-        #self.visualize_data(data)
+        self.visualize_data(data)
 
         # Convert from dictionary to dataframe
         result = pd.DataFrame([[data[key] for key in data.keys()]], columns=[key for key in data.keys()])
@@ -308,26 +309,6 @@ class ArgoversePreprocessor(Preprocessor):
 
         return data
 
-    def draw_drivable_area(self, lane_polygons, query_min_x, query_max_x, query_min_y, query_max_y):
-
-        fig = plt.figure(figsize=(10, 10))
-        ax = fig.add_subplot(111)
-
-        #ax.scatter(xcenter, ycenter, 200, color="g", marker=".", zorder=2)
-        ax.set_xlim([query_min_x, query_max_x])
-        ax.set_ylim([query_min_y, query_max_y])
-
-        for i, polygon in enumerate(lane_polygons):
-            color = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
-            ax.plot(polygon[:, 0], polygon[:, 1], color=color, alpha=1, zorder=1)
-
-        ax = plt.gca()
-        ax.add_patch(patches.Rectangle((-100, -100), 200, 200, edgecolor='red',
-                                       facecolor='none', linewidth=2))
-
-        #ax.axis('equals')
-        plt.show()
-
     def get_points_inside_roi_mask(self, polygon, x_min, x_max, y_min, y_max):
         mask_points_inside_of_roi = np.array([x_min < point[0] < x_max and y_min < point[1] < y_max for point in polygon])
         upd_mask_points_inside_of_roi = copy.deepcopy(mask_points_inside_of_roi)
@@ -423,7 +404,7 @@ class ArgoversePreprocessor(Preprocessor):
         drivable_areas_boundaries = copy.deepcopy(drivable_areas_boundaries)
 
         # Draw whole drivable area to debug
-        # self.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y)
+        visual.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y)
         #
         # # TODO: Show rotated map
         # rotated_drivable_areas_boundaries = []

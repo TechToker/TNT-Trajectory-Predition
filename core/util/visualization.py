@@ -1,7 +1,7 @@
 import random
 
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt, patches
 
 TARGET_COLOR = 'r'
 OTHER_AGENT_COLOR = 'gray'
@@ -11,6 +11,25 @@ OTHER_AGENT_HISTORY_COLOR = (160 / 255, 160 / 255, 160 / 255)
 
 AGENT_POINT_SIZE = 7
 
+
+def draw_drivable_area(lane_polygons, query_min_x, query_max_x, query_min_y, query_max_y):
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111)
+
+    # ax.scatter(xcenter, ycenter, 200, color="g", marker=".", zorder=2)
+    ax.set_xlim([query_min_x, query_max_x])
+    ax.set_ylim([query_min_y, query_max_y])
+
+    for i, polygon in enumerate(lane_polygons):
+        color = [random.uniform(0, 1), random.uniform(0, 1), random.uniform(0, 1)]
+        ax.plot(polygon[:, 0], polygon[:, 1], color=color, alpha=1, zorder=1)
+
+    ax = plt.gca()
+    ax.add_patch(patches.Rectangle((-100, -100), 200, 200, edgecolor='red',
+                                   facecolor='none', linewidth=2))
+
+    # ax.axis('equals')
+    plt.show()
 
 def is_trajectory_polyline(polyline):
     all_nodes_steps = polyline[:, 4]
@@ -50,10 +69,10 @@ def draw_trajectory(plt, line_vectors_centers, line_vectors, is_target_drawn):
 def draw_future_trajectory(plt, trajectory, color, width):
     # Convert from array of offsets to point w.r.t start agent position
     trajectory = np.cumsum(trajectory, axis=0)
-    plt.plot(trajectory[:, 0], trajectory[:, 1], color=color, alpha=1, linewidth=width, zorder=2)
+    plt.plot(trajectory[:, 0], trajectory[:, 1], color=color, alpha=1, linewidth=width, zorder=2, marker='o')
 
 
-def draw_scene(polylines, future_trajectory, model_prediction):
+def draw_scene(polylines, future_trajectory, model_prediction, outside_da_mask=None):
     fig = plt.figure(0, figsize=(8, 7))
     fig.clear()
 
@@ -72,7 +91,14 @@ def draw_scene(polylines, future_trajectory, model_prediction):
     draw_future_trajectory(plt, future_trajectory, 'g', width=3)
     draw_future_trajectory(plt, model_prediction, 'yellow', width=2)
 
+    # TODO: Create good-looking calling
+    # get points outside of drivable area
+    if outside_da_mask is not None:
+        trajectory = np.cumsum(model_prediction, axis=0)
+        points_outside_da = trajectory[outside_da_mask]
+        plt.scatter(points_outside_da[:, 0], points_outside_da[:, 1], marker='o', color='r', zorder=5)
+
     plt.xlabel("Map X")
     plt.ylabel("Map Y")
-    plt.axis("off")
+    # plt.axis("off")
     plt.show()

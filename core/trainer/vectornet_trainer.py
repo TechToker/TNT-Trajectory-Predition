@@ -1,3 +1,4 @@
+import copy
 import time
 
 from tqdm import tqdm
@@ -15,6 +16,7 @@ import core.util.visualization as visual
 from core.trainer.trainer import Trainer
 from core.model.vectornet import VectorNet, OriginalVectorNet
 from core.optim_schedule import ScheduledOptim
+from core.drivable_area_loss import DrivableAreaLoss
 
 
 class VectorNetTrainer(Trainer):
@@ -126,22 +128,24 @@ class VectorNetTrainer(Trainer):
 
         data_iter = tqdm(
             enumerate(dataloader),
-            desc="{}_Ep_{}: loss: {:.5e}; avg_loss: {:.5e}".format("train" if training else "eval",
-                                                                   epoch,
-                                                                   0.0,
-                                                                   avg_loss),
+            desc="{}_Ep_{}: loss: {:.5e}; avg_loss: {:.5e}".format("train" if training else "eval", epoch, 0.0, avg_loss),
             total=len(dataloader),
             bar_format="{l_bar}{r_bar}"
         )
 
         for i, data in data_iter:
+            #
+            # if i < 89:
+            #     continue
+
+            # if i < 185:
+            #     continue
+
             n_graph = data.num_graphs
             if training:
-                if self.multi_gpu:
-                    # loss = self.model.module.loss(data.to(self.device))
-                    loss = self.model.loss(data.to(self.device))
-                else:
-                    loss = self.model.loss(data.to(self.device))
+
+                loss = self.model.loss_override_test(data.to(self.device))
+                #loss = self.model.loss(data.to(self.device))
 
                 self.optm_schedule.zero_grad()
                 loss.backward()
@@ -162,10 +166,7 @@ class VectorNetTrainer(Trainer):
             avg_loss += loss.detach().item()
 
             # print log info
-            desc_str = "[Info: {}_Ep_{}: loss: {:.5e}; avg_loss: {:.5e}]".format("train" if training else "eval",
-                                                                                 epoch,
-                                                                                 loss.item() / n_graph,
-                                                                                 avg_loss / num_sample)
+            desc_str = "[Info: {}_Ep_{}: loss: {:.5e}; avg_loss: {:.5e}]".format("train" if training else "eval", epoch, loss.item() / n_graph, avg_loss / num_sample)
 
             data_iter.set_description(desc=desc_str, refresh=True)
 
@@ -176,6 +177,7 @@ class VectorNetTrainer(Trainer):
         return avg_loss / num_sample
 
     def epoch_ending(self, train_loss, val_loss, metric):
+        #return 0
         wandb.log({'Train loss': train_loss,
                    'Val loss': val_loss,
                    'Learning_rate': self.optim.param_groups[0]['lr'],

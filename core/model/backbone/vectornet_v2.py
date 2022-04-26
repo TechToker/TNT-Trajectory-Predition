@@ -73,16 +73,17 @@ class VectorNetBackbone(nn.Module):
 
         sub_graph_out = self.subgraph(data) # get features for each polyline
 
-        if self.training and self.with_aux:
-            # select by random which polyline we will mask
-            randoms = 1 + torch.rand((batch_size,), device=self.device) * (valid_lens - 2) + \
-                      time_step_len * torch.arange(batch_size, device=self.device)
-
-            # mask_polyline_indices = [torch.randint(1, valid_lens[i] - 1) + i * time_step_len for i in range(batch_size)]
-
-            mask_polyline_indices = randoms.long()
-            aux_gt = sub_graph_out[mask_polyline_indices]
-            sub_graph_out[mask_polyline_indices] = 0.0
+        # If uncommit will be problem with 'use determenistic algorithms'
+        # if self.training and self.with_aux:
+        #     # select by random which polyline we will mask
+        #     randoms = 1 + torch.rand((batch_size,), device=self.device) * (valid_lens - 2) + \
+        #               time_step_len * torch.arange(batch_size, device=self.device)
+        #
+        #     # mask_polyline_indices = [torch.randint(1, valid_lens[i] - 1) + i * time_step_len for i in range(batch_size)]
+        #
+        #     mask_polyline_indices = randoms.long()
+        #     aux_gt = sub_graph_out[mask_polyline_indices]
+        #     sub_graph_out[mask_polyline_indices] = 0.0
 
         # reconstruct the batch global interaction graph data
         x = torch.cat([sub_graph_out, id_embedding], dim=1).view(batch_size, -1, self.subgraph.out_channels + 2)
@@ -95,11 +96,11 @@ class VectorNetBackbone(nn.Module):
             # global_graph_out = self.global_graph(sub_graph_out, batch_size=data.num_graphs)
             global_graph_out = self.global_graph(x, valid_lens=valid_lens)
 
-            if self.with_aux:
-                aux_in = global_graph_out.view(-1, self.global_graph_width)[mask_polyline_indices]
-                aux_out = self.aux_mlp(aux_in)
-
-                return global_graph_out, aux_out, aux_gt
+            # if self.with_aux:
+            #     aux_in = global_graph_out.view(-1, self.global_graph_width)[mask_polyline_indices]
+            #     aux_out = self.aux_mlp(aux_in)
+            #
+            #     return global_graph_out, aux_out, aux_gt
 
             return global_graph_out, None, None
 

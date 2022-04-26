@@ -60,6 +60,10 @@ class GRAPH_TYPE(Enum):
     LINES = 1
     DRIVABLE_AREA = 2
 
+class CITY_NAMES(Enum):
+    PIT = 0
+    MIA = 1
+
 
 class ArgoverseCustom(Dataset):
     def __init__(self, root, amount_processed_files, graph_type=GRAPH_TYPE.DRIVABLE_AREA, transform=None, pre_transform=None, pre_filter=None):
@@ -140,7 +144,8 @@ class ArgoverseCustom(Dataset):
 
                 orig=torch.from_numpy(raw_data['origin_pos'].values[0]).float().unsqueeze(0), # prediction start position
                 rot=torch.from_numpy(raw_data['rotation_matrix'].values[0]).float().unsqueeze(0), # rotation matrices for current scene
-                seq_id=torch.tensor([int(raw_data['seq_id'])]).int()
+                seq_id=torch.tensor([int(raw_data['seq_id'])]).int(),
+                city_id=torch.tensor(0 if raw_data['city'][0] == 'PIT' else 1).int()  # 0 - PIT; 1 - MIA
             )
 
             torch.save(graph_input, osp.join(self.processed_dir, f'data_{ind}.pt'))
