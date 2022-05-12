@@ -145,7 +145,10 @@ class ArgoverseCustom(Dataset):
                 orig=torch.from_numpy(raw_data['origin_pos'].values[0]).float().unsqueeze(0), # prediction start position
                 rot=torch.from_numpy(raw_data['rotation_matrix'].values[0]).float().unsqueeze(0), # rotation matrices for current scene
                 seq_id=torch.tensor([int(raw_data['seq_id'])]).int(),
-                city_id=torch.tensor(0 if raw_data['city'][0] == 'PIT' else 1).int()  # 0 - PIT; 1 - MIA
+                city_id=torch.tensor(0 if raw_data['city'][0] == 'PIT' else 1).int(),  # 0 - PIT; 1 - MIA
+
+                clamped_drivable_area=raw_data['graph'].values[0]['clamped_drivable_area'],
+                outline_drivable_area_index=raw_data['graph'].values[0]['outline_drivable_area_index']
             )
 
             torch.save(graph_input, osp.join(self.processed_dir, f'data_{ind}.pt'))

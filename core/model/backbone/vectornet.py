@@ -147,7 +147,6 @@ if __name__ == "__main__":
     os.chdir('..')
     # get model
     model = VectorNetBackbone(in_channels, pred_len, with_aux=True).to(device)
-    # model = OriginalVectorNet(in_channels, pred_len, with_aux=True).to(device)
 
     DATA_DIR = "dataset/interm_data"
     TRAIN_DIR = os.path.join(DATA_DIR, 'data/interm_data', 'train_intermediate')

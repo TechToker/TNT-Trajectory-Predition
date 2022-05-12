@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
         # dataset = Argoverse(dataset_input_path)
         dataset = ArgoverseInMem(dataset_input_path)
-        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=True, pin_memory=True)
+        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=False, pin_memory=True)
         for k in range(3):
             for i, data in enumerate(tqdm(batch_iter, total=len(batch_iter), bar_format="{l_bar}{r_bar}")):
                 pass

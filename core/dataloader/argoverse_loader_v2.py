@@ -257,8 +257,8 @@ if __name__ == "__main__":
         dataset_input_path = os.path.join(INTERMEDIATE_DATA_DIR, f"{folder}_intermediate")
 
         # dataset = Argoverse(dataset_input_path)
-        dataset = ArgoverseInMem(dataset_input_path).shuffle()
-        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=True, pin_memory=True)
+        dataset = ArgoverseInMem(dataset_input_path) #.shuffle()
+        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=False, pin_memory=True)
         for k in range(1):
             for i, data in enumerate(tqdm(batch_iter, total=len(batch_iter), bar_format="{l_bar}{r_bar}")):
                 pass

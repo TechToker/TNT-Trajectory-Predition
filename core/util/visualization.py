@@ -68,7 +68,7 @@ def draw_trajectory(plt, line_vectors_centers, line_vectors, is_target_drawn):
 
 def draw_future_trajectory(plt, trajectory, color, width):
     # Convert from array of offsets to point w.r.t start agent position
-    trajectory = np.cumsum(trajectory, axis=0)
+    #trajectory = np.cumsum(trajectory, axis=0)
     plt.plot(trajectory[:, 0], trajectory[:, 1], color=color, alpha=1, linewidth=width, zorder=2, marker='o')
 
 
@@ -94,11 +94,17 @@ def draw_scene(polylines, future_trajectory, model_prediction, outside_da_mask=N
     # TODO: Create good-looking calling
     # get points outside of drivable area
     if outside_da_mask is not None:
-        trajectory = np.cumsum(model_prediction, axis=0)
-        points_outside_da = trajectory[outside_da_mask]
+        points_outside_da = model_prediction[outside_da_mask]
         plt.scatter(points_outside_da[:, 0], points_outside_da[:, 1], marker='o', color='r', zorder=5)
 
     plt.xlabel("Map X")
     plt.ylabel("Map Y")
-    # plt.axis("off")
+
+    plt.grid()
+    # plt.xlim([-110, 110])
+    # plt.ylim([-110, 110])
+
+    plt.xlim([-50, 50])
+    plt.ylim([-50, 50])
+
     plt.show()

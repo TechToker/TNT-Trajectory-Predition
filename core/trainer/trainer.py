@@ -1,5 +1,5 @@
 # trainner to train the models
-
+import copy
 import os
 from tqdm import tqdm
 
@@ -13,6 +13,8 @@ import numpy as np
 from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.data import DataLoader, DataListLoader
 from argoverse.evaluation.eval_forecasting import get_displacement_errors_and_miss_rate
+import core.util.drivable_area_polygons_helper as da_helper
+import core.util.visualization as visual
 
 import gc
 
@@ -75,7 +77,7 @@ class Trainer(object):
             batch_size=self.batch_size,
             # num_workers=num_workers,
             # pin_memory=True,
-            shuffle=True
+            shuffle=False
         )
         # self.eval_loader = self.loader(self.evalset, batch_size=self.batch_size, num_workers=num_workers)
         self.eval_loader = self.loader(self.evalset, batch_size=self.batch_size)
@@ -236,6 +238,23 @@ class Trainer(object):
         else:
             raise NotImplementedError
 
+    def get_polylines_from_data(self, data):
+        nodes = data.x.detach().numpy()
+        cluster = data.cluster.detach().numpy()
+
+        polylines = []
+        for cluster_idc in np.unique(cluster):
+            [indices] = np.where(cluster == cluster_idc)
+            polyline = nodes[indices]
+
+            polylines.append(polyline)
+
+        return polylines
+
+
+    def calculate_off_road_rate(self):
+        return 0
+
     def compute_metric(self, miss_threshold=2.0):
         """
         compute metric for test dataset
@@ -255,9 +274,15 @@ class Trainer(object):
 
         self.model.eval()
         with torch.no_grad():
+
+            outside_da_counter = 0
+            total_amount_of_samples = 0
+
             for data in tqdm(self.test_loader):
+                data_copy = copy.deepcopy(data)
+
                 batch_size = data.num_graphs
-                gt = data.y.unsqueeze(1).view(batch_size, -1, 2).cumsum(axis=1).numpy()
+                gt = data.y.unsqueeze(1).view(batch_size, -1, 2).cumsum(axis=1).numpy()  # cumulative format
 
                 # inference and transform dimension
                 if self.multi_gpu:
@@ -266,13 +291,42 @@ class Trainer(object):
                 else:
                     out = self.model.inference(data.to(self.device))
                 dim_out = len(out.shape)
-                pred_y = out.unsqueeze(dim_out).view((batch_size, k, horizon, 2)).cumsum(axis=2).cpu().numpy()
+                pred_y = out.unsqueeze(dim_out).view((batch_size, k, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
+
+                # Calculate offroad rate. TODO: Refactoring!
+                data_cpu = data_copy.cpu()
+                orig_poses = data_cpu.orig.cpu().numpy()
+                clamped_drivable_areas = data_cpu.clamped_drivable_area
+                outline_drivable_area_indexes = data_cpu.outline_drivable_area_index
+
+                total_amount_of_samples += len(orig_poses)
 
                 # record the prediction and ground truth
                 for batch_id in range(batch_size):
                     forecasted_trajectories[seq_id] = [pred_y_k for pred_y_k in pred_y[batch_id]]
                     gt_trajectories[seq_id] = gt[batch_id]
+
+                    # Calculate offroad rate. TODO: Refactoring!
+                    current_pred = forecasted_trajectories[seq_id][0]
+                    current_gt = gt_trajectories[seq_id] # TODO: I dunno why but here gt trajectory presented in cumulative format
+
+                    drivable_area_polygons = clamped_drivable_areas[batch_id]
+                    outline_da_polygon_index = outline_drivable_area_indexes[batch_id]
+
+                    outside_da_mask_pred = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_pred, show_visualization=False)
+                    #outside_da_mask_gt = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_gt, show_visualization=False)
+
+                    count_points_outside = np.count_nonzero(outside_da_mask_pred)
+
+                    # visualization work only if batch size = 1
+                    # polylines = self.get_polylines_from_data(data_cpu)
+                    # visual.draw_scene(polylines, current_gt, current_pred, outside_da_mask_pred)
+
+                    outside_da_counter += count_points_outside
+                    # end
+
                     seq_id += 1
+
 
             metric_results = get_displacement_errors_and_miss_rate(
                 forecasted_trajectories,
@@ -281,4 +335,7 @@ class Trainer(object):
                 horizon,
                 miss_threshold
             )
+
+            metric_results['offroad_rate'] = outside_da_counter / (total_amount_of_samples * 30)  # 30 - forecast horizon
+
         return metric_results

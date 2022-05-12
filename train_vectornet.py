@@ -56,11 +56,11 @@ def train(args):
     #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
     #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
 
-    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 205942, graph_type=GRAPH_TYPE.DRIVABLE_AREA) #1632) # 205942 #.shuffle()
-    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 39472, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 352)  # 39472
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 20000, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 5000, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 39472
 
     # init output dir
-    time_stamp = datetime.now().strftime("%m-%d-%H-%M")
+    time_stamp = datetime.now().strftime("%m-%d-%H-%M-%S")
     output_dir = pjoin(args.output_dir, time_stamp)
     if os.path.exists(output_dir) and len(os.listdir(output_dir)) > 0:
         raise Exception("The output folder does exists and is not empty! Check the folder.")
@@ -98,11 +98,6 @@ def train(args):
     # training
     for iter_epoch in range(args.n_epoch):
         train_loss = trainer.train(iter_epoch)
-        # print(f't_loss: {train_loss}')
-        #
-        # # if iter_epoch == 0:
-        # #     break
-
         eval_loss = trainer.eval(iter_epoch)
 
         # compute the metrics and save
@@ -123,7 +118,7 @@ def train(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_drivarea",
+    parser.add_argument("-d", "--data_root", required=False, type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/interm_data_drivarea_dap",
                         help="root dir for datasets")
     parser.add_argument("-o", "--output_dir", required=False, type=str, default="run/vectornet/",
                         help="ex)dir to save checkpoint and model")
@@ -135,12 +130,12 @@ if __name__ == "__main__":
 
     parser.add_argument("-b", "--batch_size", type=int, default=64, #64,
                         help="number of batch_size")
-    parser.add_argument("-e", "--n_epoch", type=int, default=50,
+    parser.add_argument("-e", "--n_epoch", type=int, default=30,
                         help="number of epochs")
-    parser.add_argument("-w", "--num_workers", type=int, default=16, # 16,
+    parser.add_argument("-w", "--num_workers", type=int, default=1, # 16,
                         help="dataloader worker size")
 
-    parser.add_argument("-c", "--with_cuda", action="store_true", default=True,
+    parser.add_argument("-c", "--with_cuda", action="store_true", default=False,
                         help="training with CUDA: true, or false")
     parser.add_argument("-cd", "--cuda_device", type=int, default=[], nargs='+',
                         help="CUDA device ids")
@@ -149,7 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--on_memory", type=bool, default=True, help="Loading on memory: true or false")
 
     parser.add_argument("--lr", type=float, default=3e-4, help="learning rate of adam")
-    parser.add_argument("-we", "--warmup_epoch", type=int, default=10,
+    parser.add_argument("-we", "--warmup_epoch", type=int, default=10, # 10
                         help="The epoch to start the learning rate decay")
     parser.add_argument("-luf", "--lr_update_freq", type=int, default=5,
                         help="learning rate decay frequency for lr scheduler")
@@ -159,7 +154,15 @@ if __name__ == "__main__":
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="adam first beta value")
 
     parser.add_argument("-rc", "--resume_checkpoint", type=str, help="resume a checkpoint for fine-tune")
-    parser.add_argument("-rm", "--resume_model", type=str, help="resume a model state for fine-tune")
+    # parser.add_argument("-rc", "--resume_checkpoint", type=str,
+    #                     #default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-05-00-30/checkpoint_iter27.ckpt",
+    #                     default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-04-12-42/checkpoint_iter6.ckpt",
+    #                     help="resume a checkpoint for fine-tune")
+
+    #parser.add_argument("-rm", "--resume_model", type=str, help="resume a model state for fine-tune")
+    parser.add_argument("-rm", "--resume_model", type=str,
+                        default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/untrained_vectornet.pth",
+                        help="resume a model state for fine-tune")
 
     args = parser.parse_args()
     train(args)

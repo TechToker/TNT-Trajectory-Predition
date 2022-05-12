@@ -192,8 +192,8 @@ if __name__ == "__main__":
             INTERMEDIATE_DATA_DIR, f"{folder}_intermediate")
 
         batch_size = 256
-        dataset = GraphDataset(dataset_input_path).shuffle()
-        batch_iter = DataLoader(dataset, batch_size=batch_size, num_workers=16, shuffle=True, pin_memory=True)
+        dataset = GraphDataset(dataset_input_path) #.shuffle()
+        batch_iter = DataLoader(dataset, batch_size=batch_size, num_workers=16, shuffle=False, pin_memory=True)
         print("length of dataset: {}.".format(dataset.len()))
         final_offset = []
         for data in tqdm(batch_iter):

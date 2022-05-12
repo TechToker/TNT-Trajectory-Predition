@@ -5,5 +5,6 @@ __pycache__/
 **/dataset/
 **/run/
 **/test_result/
+**/pretrained_models/
 **/wandb/
 core/util/tnt_data_sample.pt

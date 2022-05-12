@@ -122,7 +122,7 @@ if __name__ == "__main__":
     INTERMEDIATE_DATA_DIR = "~/projects/Code/trajectory-prediction/TNT-Trajectory-Predition/dataset/interm_tnt_n_s_0804_small"
     dataset_input_path = os.path.join(INTERMEDIATE_DATA_DIR, "train_intermediate")
     dataset = ArgoverseInMem(dataset_input_path)
-    data_iter = DataLoader(dataset, batch_size=batch_size, num_workers=16, shuffle=True, pin_memory=True)
+    data_iter = DataLoader(dataset, batch_size=batch_size, num_workers=16, shuffle=False, pin_memory=True)
 
     model = VectorNetBackbone(dataset.num_features, with_aux=True, device=device).to(device)
 

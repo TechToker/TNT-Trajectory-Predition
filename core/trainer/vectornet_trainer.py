@@ -14,7 +14,7 @@ from torch_geometric.nn import DataParallel
 import core.util.visualization as visual
 
 from core.trainer.trainer import Trainer
-from core.model.vectornet import VectorNet, OriginalVectorNet
+from core.model.vectornet import VectorNet
 from core.optim_schedule import ScheduledOptim
 from core.drivable_area_loss import DrivableAreaLoss
 
@@ -84,7 +84,6 @@ class VectorNetTrainer(Trainer):
         # input dim: (20, 8); output dim: (30, 2)
 
         model_name = VectorNet
-        # model_name = OriginalVectorNet
 
         self.model = model_name(
             self.trainset.num_features,
@@ -93,6 +92,9 @@ class VectorNetTrainer(Trainer):
             with_aux=aux_loss,
             device=self.device
         )
+
+        # torch.save(self.model.state_dict(), 'default_model.pth')
+        # raise ValueError('A very specific bad thing happened.')
 
         # resume from model file or maintain the original
         if model_path:
@@ -133,14 +135,9 @@ class VectorNetTrainer(Trainer):
             bar_format="{l_bar}{r_bar}"
         )
 
+        #return 0
+
         for i, data in data_iter:
-            #
-            # if i < 89:
-            #     continue
-
-            # if i < 185:
-            #     continue
-
             n_graph = data.num_graphs
             if training:
 
@@ -154,11 +151,9 @@ class VectorNetTrainer(Trainer):
 
             else:
                 with torch.no_grad():
-                    if self.multi_gpu:
-                        # loss = self.model.module.loss(data.to(self.device))
-                        loss = self.model.loss(data.to(self.device))
-                    else:
-                        loss = self.model.loss(data.to(self.device))
+
+                    loss = self.model.loss_override_test(data.to(self.device))
+                    #loss = self.model.loss(data.to(self.device))
 
                     self.write_log("Eval Loss", loss.item() / n_graph, i + epoch * len(dataloader))
 
@@ -177,13 +172,14 @@ class VectorNetTrainer(Trainer):
         return avg_loss / num_sample
 
     def epoch_ending(self, train_loss, val_loss, metric):
-        #return 0
+        # return 0
         wandb.log({'Train loss': train_loss,
                    'Val loss': val_loss,
                    'Learning_rate': self.optim.param_groups[0]['lr'],
                    'MinADE': metric["minADE"],
                    'MinFDE': metric["minFDE"],
                    'MR': metric["MR"],
+                   'Offroad_rate': metric['offroad_rate']
                    })
 
     def test(self):

@@ -114,10 +114,10 @@ if __name__ == "__main__":
 
     for folder in ["train", "val"]:
         dataset_input_path = os.path.join(INTERMEDIATE_DATA_DIR, f"{folder}_intermediate")
-        dataset = ArgoverseInMem(dataset_input_path).shuffle()
+        dataset = ArgoverseInMem(dataset_input_path) #.shuffle()
 
         layer = SubGraph(dataset.num_features, 1).cpu()
-        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=True, pin_memory=True)
+        batch_iter = DataLoader(dataset, batch_size=16, num_workers=16, shuffle=False, pin_memory=True)
 
         for i, data in enumerate(tqdm(batch_iter, total=len(batch_iter), bar_format="{l_bar}{r_bar}")):
             y = layer(data.cpu())

@@ -26,6 +26,8 @@ from argoverse.utils.mpl_plotting_utils import visualize_centerline
 
 from core.util.preprocessor.base import Preprocessor
 from core.util.cubic_spline import Spline2D
+import core.util.drivable_area_polygons_helper as poly_cutter
+import core.util.visualization as visual
 
 warnings.filterwarnings("ignore")
 
@@ -55,6 +57,9 @@ class ArgoversePreprocessor(Preprocessor):
 
     # Method only save dataframe sequence into
     def __getitem__(self, idx):
+        # if idx < 24:
+        #     return 0
+
         #print(f'get item: {idx}')
         f_path = self.loader.seq_list[idx]
 
@@ -134,8 +139,10 @@ class ArgoversePreprocessor(Preprocessor):
 
     def get_rotation_matrix(self, data, trgt_agent_current_position):
         if self.normalized:
-            pre, conf = self.am.get_lane_direction(data['all_agents_trajectories'][0][self.obs_horizon - 1], data['city'])
 
+            # TODO: Here can be a problem, because if conf < 0.8, pre is ALWAYS unreliable
+
+            pre, conf = self.am.get_lane_direction(data['all_agents_trajectories'][0][self.obs_horizon - 1], data['city'])
             if conf <= 0.1:
                 pre = (trgt_agent_current_position - data['all_agents_trajectories'][0][self.obs_horizon - 4]) / 2.0
 
@@ -293,6 +300,9 @@ class ArgoversePreprocessor(Preprocessor):
         data['agents_future_presence'] = agents_future_presence
         data['future_trajectories'] = future_trajectories
 
+        # print('future traj: ')
+        # print(future_trajectories)
+
         target_agent_full_trajectory = data['all_agents_trajectories'][0].copy().astype(np.float32)
         target_candidates, target_candidates_onehot, target_offset_gt, centerline_splines, reference_centerline_idx \
             = self.get_target_agent_features(data['city'],
@@ -377,24 +387,44 @@ class ArgoversePreprocessor(Preprocessor):
 
         return np.array(drivable_area_boundaries)
 
+    def get_clamped_drivable_area(self, data, drivable_area_polygons, show_visualization=False):
+        clamped_polygons = []
+        outline_polygon_index = -1
+
+        if show_visualization:
+            fig, ax = plt.subplots()
+
+        for polygon in drivable_area_polygons:
+            # TODO: TWO LINES BELOW IS DUPLICATION, FIX IT
+            polygon = polygon[:, :2]  # remove info about height
+            norm_polygon = np.matmul(data['rotation_matrix'], (polygon - data['origin_pos'].reshape(-1, 2)).T).T
+
+            clamped_poly = poly_cutter.cut_polygon_by_roi(norm_polygon)
+            if len(clamped_poly) < 3:
+                continue
+
+            is_outline_polygon = len(polygon) == 8268 or len(polygon) == 4734
+            if is_outline_polygon:
+                outline_polygon_index = len(clamped_polygons)
+
+            if show_visualization:
+                poly_cutter.draw_polygon(ax, norm_polygon, clamped_poly, is_outline_polygon)
+
+            clamped_polygons.append(clamped_poly)
+
+        if show_visualization:
+            plt.show()
+
+        return np.array(clamped_polygons, dtype=object), outline_polygon_index
+
     def get_drivable_area_graph(self, data):
         """Get a rectangle area defined by pred_range."""
         x_min, x_max, y_min, y_max = -self.obs_range, self.obs_range, -self.obs_range, self.obs_range
-        radius = max(abs(x_min), abs(x_max)) + max(abs(y_min), abs(y_max))
 
-        query_search_range_manhattan = 100 # = radius
         city = data['city']
+        query_search_range_manhattan = 100
 
-        # Override default position
-        # city = 'PIT'
-        # query_x = 2595
-        # query_y = 1205
-        # data['origin_pos'][0] = query_x
-        # data['origin_pos'][1] = query_y
-
-        query_x = data['origin_pos'][0]
-        query_y = data['origin_pos'][1]
-
+        query_x, query_y = data['origin_pos']
         query_min_x = query_x - query_search_range_manhattan
         query_max_x = query_x + query_search_range_manhattan
         query_min_y = query_y - query_search_range_manhattan
@@ -402,24 +432,13 @@ class ArgoversePreprocessor(Preprocessor):
 
         drivable_areas_boundaries = self.am.find_local_driveable_areas([query_min_x, query_max_x, query_min_y, query_max_y], city)
         drivable_areas_boundaries = copy.deepcopy(drivable_areas_boundaries)
+        visual.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y) # Draw whole drivable area to debug
 
-        # Draw whole drivable area to debug
-        visual.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y)
-        #
-        # # TODO: Show rotated map
-        # rotated_drivable_areas_boundaries = []
-        # for da_boundary in drivable_areas_boundaries:
-        #     da_boundary = da_boundary[:, :2]  # remove info about height
-        #
-        #     rotated_boundary = np.matmul(data['rotation_matrix'], (da_boundary - data['origin_pos'].reshape(-1, 2)).T).T
-        #     rotated_drivable_areas_boundaries.append(rotated_boundary)
-        # rotated_drivable_areas_boundaries = np.array(rotated_drivable_areas_boundaries)
-        # self.draw_drivable_area(rotated_drivable_areas_boundaries, x_min, x_max, y_min, y_max)
+        # Bake drivable area clamped by ROI
+        clamped_drivable_area_polygons, outline_drivable_area_index = self.get_clamped_drivable_area(data, drivable_areas_boundaries)
 
         drivable_area_polygons = self.filtering_points_outside_roi(data, drivable_areas_boundaries, x_min, x_max, y_min, y_max)
-
-        # Draw filtered drivable area
-        #self.draw_drivable_area(drivable_area_polygons, x_min, x_max, y_min, y_max)
+        #visual.draw_drivable_area(drivable_area_polygons, x_min, x_max, y_min, y_max) # Draw filtered drivable area
 
         boundary_vectors_centers, boundary_vectors = [], []
         for polygon_segment in drivable_area_polygons:
@@ -444,6 +463,12 @@ class ArgoversePreprocessor(Preprocessor):
 
         graph['centers'] = np.concatenate(boundary_vectors_centers, 0)
         graph['lines_vectors'] = np.concatenate(boundary_vectors, 0)
+
+        graph['clamped_drivable_area'] = clamped_drivable_area_polygons
+        graph['outline_drivable_area_index'] = outline_drivable_area_index
+
+        if outline_drivable_area_index != 0:
+            print(f'warning: {outline_drivable_area_index}')
 
         return graph
 
@@ -635,7 +660,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-r", "--root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/")
     parser.add_argument("-d", "--dest", type=str, default="dataset")
-    parser.add_argument("-s", "--small", action='store_true', default=False)
+    parser.add_argument("-s", "--small", action='store_true', default=True)
 
     args = parser.parse_args()
 
@@ -651,6 +676,7 @@ if __name__ == "__main__":
 
     # Foreach train / val / test split
     for split in ["train", "val", "test"]:
+    # for split in ["val", "test"]:
         # construct the preprocessor and dataloader
         print(raw_dir)
         print()
@@ -669,9 +695,9 @@ if __name__ == "__main__":
             #     break
 
             if args.small:
-                if split == "train" and i >= 250:
+                if split == "train" and i >= 10:
                     break
-                elif split == "val" and i >= 100:
+                elif split == "val" and i >= 10:
                     break
                 elif split == "test" and i >= 100:
                     break
