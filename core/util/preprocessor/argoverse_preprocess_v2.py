@@ -2,6 +2,7 @@
 # Author: Jianbang LIU @ RPAI, CUHK
 # Date: 2021.07.16
 
+import math
 import os
 import argparse
 from os.path import join as pjoin
@@ -84,8 +85,25 @@ class ArgoversePreprocessor(Preprocessor):
 
         data['seq_id'] = seq_id
 
-        # visualization for debug purpose
-        self.visualize_data(data)
+        # HERE CODE TO DETECT WRONG ROTATION NORMALIZATION
+        # vector_1 = data['future_trajectories'][0][0]
+        # vector_2 = [1, 0]
+        #
+        # unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+        # unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+        # dot_product = np.dot(unit_vector_1, unit_vector_2)
+        # angle = math.degrees(np.arccos(dot_product))
+        #
+        # vector_len = np.linalg.norm(vector_1)
+        #
+        # print()
+        # print(f'vec1: {vector_1}; ang: {angle}; len:{vector_len}')
+        #
+        # # visualization for debug purpose
+        #
+        # if (vector_1[1] < 0 and vector_len > 0.1) or ((angle < 70 or angle > 110) and vector_len > 0.35):
+
+        #self.visualize_data(data)
 
         # Convert from dictionary to dataframe
         result = pd.DataFrame([[data[key] for key in data.keys()]], columns=[key for key in data.keys()])
@@ -141,10 +159,9 @@ class ArgoversePreprocessor(Preprocessor):
         if self.normalized:
 
             # TODO: Here can be a problem, because if conf < 0.8, pre is ALWAYS unreliable
-
-            pre, conf = self.am.get_lane_direction(data['all_agents_trajectories'][0][self.obs_horizon - 1], data['city'])
-            if conf <= 0.1:
-                pre = (trgt_agent_current_position - data['all_agents_trajectories'][0][self.obs_horizon - 4]) / 2.0
+            # pre, conf = self.am.get_lane_direction(data['all_agents_trajectories'][0][self.obs_horizon - 1], data['city'])
+            # if conf <= 0.1:
+            pre = (data['all_agents_trajectories'][0][self.obs_horizon + 4] - data['all_agents_trajectories'][0][self.obs_horizon - 4]) / 2.0
 
             theta = - np.arctan2(pre[1], pre[0]) + np.pi / 2
 
@@ -300,9 +317,6 @@ class ArgoversePreprocessor(Preprocessor):
         data['agents_future_presence'] = agents_future_presence
         data['future_trajectories'] = future_trajectories
 
-        # print('future traj: ')
-        # print(future_trajectories)
-
         target_agent_full_trajectory = data['all_agents_trajectories'][0].copy().astype(np.float32)
         target_candidates, target_candidates_onehot, target_offset_gt, centerline_splines, reference_centerline_idx \
             = self.get_target_agent_features(data['city'],
@@ -432,7 +446,7 @@ class ArgoversePreprocessor(Preprocessor):
 
         drivable_areas_boundaries = self.am.find_local_driveable_areas([query_min_x, query_max_x, query_min_y, query_max_y], city)
         drivable_areas_boundaries = copy.deepcopy(drivable_areas_boundaries)
-        visual.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y) # Draw whole drivable area to debug
+        #visual.draw_drivable_area(drivable_areas_boundaries, query_min_x, query_max_x, query_min_y, query_max_y) # Draw whole drivable area to debug
 
         # Bake drivable area clamped by ROI
         clamped_drivable_area_polygons, outline_drivable_area_index = self.get_clamped_drivable_area(data, drivable_areas_boundaries)
@@ -660,7 +674,7 @@ if __name__ == "__main__":
 
     parser.add_argument("-r", "--root", type=str, default="/home/techtoker/projects/TNT-Trajectory-Predition/dataset/")
     parser.add_argument("-d", "--dest", type=str, default="dataset")
-    parser.add_argument("-s", "--small", action='store_true', default=True)
+    parser.add_argument("-s", "--small", action='store_true', default=False)
 
     args = parser.parse_args()
 
