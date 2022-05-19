@@ -8,3 +8,7 @@ __pycache__/
 **/pretrained_models/
 **/wandb/
 core/util/tnt_data_sample.pt
+core/__pycache__/loss.cpython-36.pyc
+core/__pycache__/loss.cpython-36.pyc
+core/__pycache__/loss.cpython-36.pyc
+core/__pycache__/loss.cpython-38.pyc

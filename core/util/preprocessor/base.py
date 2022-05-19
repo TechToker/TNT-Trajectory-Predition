@@ -12,13 +12,20 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 from argoverse.utils.mpl_plotting_utils import visualize_centerline
-
+import math
 
 class Preprocessor(Dataset):
     """
     superclass for all the trajectory data preprocessor
     those preprocessor will reformat the data in a single sequence and feed to the system or store them
     """
+
+    COUNT_GO_STRAIGHT = 0
+    COUNT_LEFT = 0
+    COUNT_RIGHT = 0
+
+    COUNT_BEFORE_SAVE_STRAIGHT = 5
+
     def __init__(self, root_dir, algo="tnt", obs_horizon=20, obs_range=30, pred_horizon=30):
         self.root_dir = root_dir            # root directory stored the dataset
 
@@ -87,6 +94,40 @@ class Preprocessor(Dataset):
         dataframe.to_pickle(os.path.join(dir_, fname))
         # print("[Preprocessor]: Saving data to {} with name: {}...".format(dir_, fname))
 
+
+    def balance_data(self, data):
+
+        # HERE CODE TO CALCULATE DIFFERENT BEHAVIOUR
+        future_trajectory = data['future_trajectories'][0][0]
+
+        vector_1 = future_trajectory[-1:][0]
+        vector_2 = [0, 1]
+
+        unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+        unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+
+        dot_product = np.dot(unit_vector_1, unit_vector_2)
+        angle = math.degrees(np.arccos(dot_product))
+
+        if angle < 5:
+            Preprocessor.COUNT_BEFORE_SAVE_STRAIGHT -= 1
+
+            if Preprocessor.COUNT_BEFORE_SAVE_STRAIGHT != 0:
+                return False
+            else:
+                Preprocessor.COUNT_BEFORE_SAVE_STRAIGHT = 5
+
+            Preprocessor.COUNT_GO_STRAIGHT += 1
+
+        if 5 < angle:
+            if vector_1[0] < 0:
+                Preprocessor.COUNT_LEFT += 1
+            else:
+                Preprocessor.COUNT_RIGHT += 1
+
+        print(f'STRGT: {Preprocessor.COUNT_GO_STRAIGHT}; LEFT: {Preprocessor.COUNT_LEFT}; RIGHT: {Preprocessor.COUNT_RIGHT}')
+        return True
+
     def process_and_save(self, dataframe: pd.DataFrame, seq_id, dir_=None, map_feat=True):
         """
         save the feature in the data sequence in a single csv files
@@ -97,6 +138,12 @@ class Preprocessor(Dataset):
         :return:
         """
         df_processed = self.process(dataframe, seq_id, map_feat)
+
+        need_save = self.balance_data(df_processed)
+
+        if not need_save:
+            return []
+
         self.save(df_processed, seq_id, dir_)
 
         return []

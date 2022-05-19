@@ -34,6 +34,13 @@ warnings.filterwarnings("ignore")
 
 
 class ArgoversePreprocessor(Preprocessor):
+
+    COUNT_GO_STRAIGHT = 0
+    COUNT_SLIGHT_LEFT = 0
+    COUNT_SLIGHT_RIGHT = 0
+    COUNT_LEFT = 0
+    COUNT_RIGHT = 0
+
     def __init__(self,
                  root_dir,
                  split="train",
@@ -85,6 +92,35 @@ class ArgoversePreprocessor(Preprocessor):
 
         data['seq_id'] = seq_id
 
+        # # HERE CODE TO CALCULATE DIFFERENT BEHAVIOUR
+        # future_trajectory = data['future_trajectories'][0]
+        #
+        # vector_1 = future_trajectory[-1:][0]
+        # vector_2 = [0, 1]
+        #
+        # unit_vector_1 = vector_1 / np.linalg.norm(vector_1)
+        # unit_vector_2 = vector_2 / np.linalg.norm(vector_2)
+        #
+        # dot_product = np.dot(unit_vector_1, unit_vector_2)
+        # angle = math.degrees(np.arccos(dot_product))
+        #
+        # if angle < 5:
+        #     ArgoversePreprocessor.COUNT_GO_STRAIGHT += 1
+        #
+        # if 5 < angle < 25:
+        #     if vector_1[0] < 0:
+        #         ArgoversePreprocessor.COUNT_SLIGHT_LEFT += 1
+        #     else:
+        #         ArgoversePreprocessor.COUNT_SLIGHT_RIGHT += 1
+        #
+        # if 25 < angle:
+        #     if vector_1[0] < 0:
+        #         ArgoversePreprocessor.COUNT_LEFT += 1
+        #     else:
+        #         ArgoversePreprocessor.COUNT_RIGHT += 1
+        #
+        # print(f'STRGT: {ArgoversePreprocessor.COUNT_GO_STRAIGHT}; S_LEFT : {ArgoversePreprocessor.COUNT_SLIGHT_LEFT}; S_RIGHT : {ArgoversePreprocessor.COUNT_SLIGHT_RIGHT}; LEFT: {ArgoversePreprocessor.COUNT_LEFT}; RIGHT: {ArgoversePreprocessor.COUNT_RIGHT}')
+
         # HERE CODE TO DETECT WRONG ROTATION NORMALIZATION
         # vector_1 = data['future_trajectories'][0][0]
         # vector_2 = [1, 0]
@@ -102,8 +138,7 @@ class ArgoversePreprocessor(Preprocessor):
         # # visualization for debug purpose
         #
         # if (vector_1[1] < 0 and vector_len > 0.1) or ((angle < 70 or angle > 110) and vector_len > 0.35):
-
-        #self.visualize_data(data)
+        #     self.visualize_data(data)
 
         # Convert from dictionary to dataframe
         result = pd.DataFrame([[data[key] for key in data.keys()]], columns=[key for key in data.keys()])
@@ -161,7 +196,7 @@ class ArgoversePreprocessor(Preprocessor):
             # TODO: Here can be a problem, because if conf < 0.8, pre is ALWAYS unreliable
             # pre, conf = self.am.get_lane_direction(data['all_agents_trajectories'][0][self.obs_horizon - 1], data['city'])
             # if conf <= 0.1:
-            pre = (data['all_agents_trajectories'][0][self.obs_horizon + 4] - data['all_agents_trajectories'][0][self.obs_horizon - 4]) / 2.0
+            pre = (data['all_agents_trajectories'][0][self.obs_horizon + 3] - data['all_agents_trajectories'][0][self.obs_horizon - 3]) / 2.0
 
             theta = - np.arctan2(pre[1], pre[0]) + np.pi / 2
 

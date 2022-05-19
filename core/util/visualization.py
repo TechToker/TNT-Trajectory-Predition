@@ -89,7 +89,13 @@ def draw_scene(polylines, future_trajectory, model_prediction, outside_da_mask=N
             draw_line(plt, line_vectors_centers, line_vectors)
 
     draw_future_trajectory(plt, future_trajectory, 'g', width=3)
-    draw_future_trajectory(plt, model_prediction, 'yellow', width=2)
+
+    # for prediction in model_prediction:
+    #     draw_future_trajectory(plt, prediction, 'yellow', width=2)
+
+    draw_future_trajectory(plt, model_prediction[0], (1, 0, 0), width=2)
+    draw_future_trajectory(plt, model_prediction[1], (0.8, 0, 0), width=2)
+    draw_future_trajectory(plt, model_prediction[2], (0.5, 0, 0), width=2)
 
     # TODO: Create good-looking calling
     # get points outside of drivable area

@@ -6,26 +6,21 @@
 
 import os
 import copy
-import random
-from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch_geometric.data import DataLoader, DataListLoader, Batch, Data
+from torch.nn import functional as f
+from torch_geometric.data import DataLoader
 
 # from core.model.layers.global_graph import GlobalGraph, SelfAttentionFCLayer
-from core.model.layers.global_graph import GlobalGraph, SelfAttentionFCLayer
-from core.model.layers.subgraph import SubGraph
-from core.dataloader.dataset import GraphDataset, GraphData
 # from core.model.backbone.vectornet import VectorNetBackbone
 from core.model.layers.basic_module import MLP
 from core.model.backbone.vectornet_v2 import VectorNetBackbone
-from core.loss import VectorLoss
-from core.drivable_area_loss import DrivableAreaLoss
-from core.dataloader.argoverse_loader import Argoverse
+from core.losses.loss import VectorLoss
+from core.losses.mtp_loss import MTPLoss
+from core.losses.drivable_area_loss import DrivableAreaLoss
 
-from core.dataloader.argoverse_loader_v2 import GraphData, ArgoverseInMem
+from core.dataloader.argoverse_loader_v2 import ArgoverseInMem
 
 
 class VectorNet(nn.Module):
@@ -50,12 +45,15 @@ class VectorNet(nn.Module):
         self.horizon = horizon
         self.subgraph_width = subgraph_width
         self.global_graph_width = global_graph_width
-        self.k = 1
 
         self.device = device
 
         self.criterion = VectorLoss(with_aux)
         self.test_criterion = DrivableAreaLoss(show_visualization=False)
+
+        self.num_of_modes = 3
+
+        self.mtp_criterion = MTPLoss(self.num_of_modes)
 
         # subgraph feature extractor
         self.backbone = VectorNetBackbone(
@@ -71,64 +69,84 @@ class VectorNet(nn.Module):
         # pred mlp
         self.traj_pred_mlp = nn.Sequential(
             MLP(global_graph_width, traj_pred_mlp_width, traj_pred_mlp_width),
-            nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels)
+            # nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels) # For MSE-loss
+            nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels * self.num_of_modes + self.num_of_modes) # For MTP-loss
         )
+
+    def prediction_normalization(self, prediction):
+        # Normalize the probabilities to sum to 1 for inference
+        mode_probabilities = prediction[:, -self.num_of_modes:].clone()
+        if not self.training:
+            mode_probabilities = f.softmax(mode_probabilities, dim=-1)
+
+        predictions = prediction[:, :-self.num_of_modes]
+
+        # return pred
+        return torch.cat((predictions, mode_probabilities), 1)
 
     def forward(self, data):
         """
         args:
             data (Data): [x, y, cluster, edge_index, valid_len]
         """
-        global_feat, _, _ = self.backbone(data)              # [batch_size, time_step_len, global_graph_width]
+        global_feat, _, _ = self.backbone(data) # [batch_size, time_step_len, global_graph_width]
         target_feat = global_feat[:, 0]
 
         pred = self.traj_pred_mlp(target_feat)
+        pred = self.prediction_normalization(pred)
 
         return pred
 
-    def loss(self, data):
+    def mtp_loss(self, data):
         global_feat, aux_out, aux_gt = self.backbone(data)
         target_feat = global_feat[:, 0]
 
         pred = self.traj_pred_mlp(target_feat)
+        pred = self.prediction_normalization(pred)
 
         y = data.y.view(-1, self.out_channels * self.horizon)
-
-        return self.criterion(pred, y, aux_out, aux_gt)
-
-    def loss_override_test(self, data):
-        copy_data = copy.deepcopy(data)
-
-        global_feat, aux_out, aux_gt = self.backbone(data)
-        target_feat = global_feat[:, 0]
-
-        pred = self.traj_pred_mlp(target_feat)
-        y = data.y.view(-1, self.out_channels * self.horizon)
-
-        # copy y and make some changes
-        # pred = copy.deepcopy(y)
-        # for i, point in enumerate(pred[0]):
-        #     if i % 2 == 0:
-        #         pred[0][i] = pred[0][i] - i * 0.01 # -0.7
-        #     # else:
-        #     #     pred[i] = 1.22
-
-        #da_loss = self.test_criterion(copy_data, pred, y) * 3 # TODO: inside da loss already cumsum => fix it
-
-        # TODO: Make cum sum for it
-        pred = torch.reshape(pred, (len(pred), 30, 2))
-        pred = torch.cumsum(pred, dim=1)
-        pred = torch.reshape(pred, (len(pred), -1,))
-
         y = torch.reshape(y, (len(y), 30, 2))
-        y = torch.cumsum(y, dim=1)
-        y = torch.reshape(y, (len(y), -1,))
+        y = torch.unsqueeze(y, 1)
 
-        mse_loss = self.criterion(pred, y)
+        loss = self.mtp_criterion(pred, y)
 
-        #print(f'MSE loss: {mse_loss}; DA loss: {da_loss}')
+        return loss
 
-        return mse_loss # + da_loss
+    # def loss(self, data):
+    #     global_feat, aux_out, aux_gt = self.backbone(data)
+    #     target_feat = global_feat[:, 0]
+    #
+    #     pred = self.traj_pred_mlp(target_feat)
+    #
+    #     y = data.y.view(-1, self.out_channels * self.horizon)
+    #
+    #     return self.criterion(pred, y, aux_out, aux_gt)
+    #
+    # def loss_override_test(self, data):
+    #     copy_data = copy.deepcopy(data)
+    #
+    #     global_feat, aux_out, aux_gt = self.backbone(data)
+    #     target_feat = global_feat[:, 0]
+    #
+    #     pred = self.traj_pred_mlp(target_feat)
+    #     y = data.y.view(-1, self.out_channels * self.horizon)
+    #
+    #     # da_loss = self.test_criterion(copy_data, pred, y) * 3 # TODO: inside da loss already cumsum => fix it
+    #
+    #     # Make cum sum for it
+    #     pred = torch.reshape(pred, (len(pred), 30, 2))
+    #     pred = torch.cumsum(pred, dim=1)
+    #     pred = torch.reshape(pred, (len(pred), -1,))
+    #
+    #     y = torch.reshape(y, (len(y), 30, 2))
+    #     y = torch.cumsum(y, dim=1)
+    #     y = torch.reshape(y, (len(y), -1,))
+    #
+    #     mse_loss = self.criterion(pred, y)
+    #
+    #     #print(f'MSE loss: {mse_loss}; DA loss: {da_loss}')
+    #
+    #     return mse_loss #+ da_loss
 
     def inference(self, data):
         return self.forward(data)

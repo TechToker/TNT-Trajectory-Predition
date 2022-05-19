@@ -143,16 +143,12 @@ def out_of_drivable_area_check(da_polygons, outline_polygon_index, pred_trajecto
             draw_polygon(ax, None, cropped_polygon, is_outline_polygon)
 
         polygon_obj = Polygon(cropped_polygon)
-        current_pos = np.zeros(2)
 
         for idx, point in enumerate(pred_trajectory):
-            # current_pos = current_pos + point  # cumulate current position
-            current_pos = point
-
-            if current_pos[0] < -100 or current_pos[0] > 100 or current_pos[1] < -100 or current_pos[1] > 100:
+            if point[0] < -100 or point[0] > 100 or point[1] < -100 or point[1] > 100:
                 continue
 
-            point_obj = Point(current_pos)
+            point_obj = Point(point)
 
             is_point_inside_polygon = polygon_obj.contains(point_obj)
 
@@ -166,3 +162,17 @@ def out_of_drivable_area_check(da_polygons, outline_polygon_index, pred_trajecto
         plt.show()
 
     return points_outside_da_mask
+
+
+def get_da_polylines_from_data(data):
+    nodes = data.x.detach().numpy()
+    cluster = data.cluster.detach().numpy()
+
+    polylines = []
+    for cluster_idc in np.unique(cluster):
+        [indices] = np.where(cluster == cluster_idc)
+        polyline = nodes[indices]
+
+        polylines.append(polyline)
+
+    return polylines

@@ -6,6 +6,7 @@ from tqdm import tqdm
 import json
 import torch
 
+import time
 import random
 import numpy as np
 
@@ -144,9 +145,6 @@ class Trainer(object):
         self.model.eval()
         return self.iteration(epoch, self.eval_loader)
 
-    def epoch_ending(self, train_loss, val_loss):
-        raise NotImplementedError
-
     def test(self):
         self.model.eval()
 
@@ -238,24 +236,13 @@ class Trainer(object):
         else:
             raise NotImplementedError
 
-    def get_polylines_from_data(self, data):
-        nodes = data.x.detach().numpy()
-        cluster = data.cluster.detach().numpy()
 
-        polylines = []
-        for cluster_idc in np.unique(cluster):
-            [indices] = np.where(cluster == cluster_idc)
-            polyline = nodes[indices]
+    # def get_prediction_for_sample(self, data):
 
-            polylines.append(polyline)
-
-        return polylines
-
-
-    def calculate_off_road_rate(self):
-        return 0
 
     def compute_metric(self, miss_threshold=2.0):
+        show_sample = True
+
         """
         compute metric for test dataset
         :param miss_threshold: float,
@@ -264,13 +251,11 @@ class Trainer(object):
         assert self.model, "[Trainer]: No valid model, metrics can't be computed!"
         assert self.testset, "[Trainer]: No test dataset, metrics can't be computed!"
 
-        forecasted_trajectories, gt_trajectories = {}, {}
+        forecasted_trajectories, forecasted_probabilities, gt_trajectories = {}, {}, {}
         seq_id = 0
 
-        # k = self.model.k if not self.multi_gpu else self.model.module.k
-        # horizon = self.model.horizon if not self.multi_gpu else self.model.module.horizon
-        k = self.model.k
-        horizon = self.model.horizon
+        num_modes = self.model.num_of_modes # self.model.k if not self.multi_gpu else self.model.module.k
+        horizon = self.model.horizon # self.model.k if not self.multi_gpu else self.model.module.k
 
         self.model.eval()
         with torch.no_grad():
@@ -279,62 +264,82 @@ class Trainer(object):
             total_amount_of_samples = 0
 
             for data in tqdm(self.test_loader):
-                data_copy = copy.deepcopy(data)
+                data_copy = copy.deepcopy(data)  # We save data_copy because inference overwrites it
 
                 batch_size = data.num_graphs
                 gt = data.y.unsqueeze(1).view(batch_size, -1, 2).cumsum(axis=1).numpy()  # cumulative format
 
                 # inference and transform dimension
-                if self.multi_gpu:
-                    # out = self.model.module(data.to(self.device))
-                    out = self.model.inference(data.to(self.device))
-                else:
-                    out = self.model.inference(data.to(self.device))
+                out = self.model.inference(data.to(self.device))
+
+                #loss = self.model.mtp_loss(copy.deepcopy(data).to(self.device))
+
+                traj_probabilities = out[:, -num_modes:]
+                out = out[:, :-num_modes]
+
                 dim_out = len(out.shape)
-                pred_y = out.unsqueeze(dim_out).view((batch_size, k, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
+                # pred_y = out.unsqueeze(dim_out).view((batch_size, k, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
+                pred_y = out.unsqueeze(dim_out).view((batch_size, num_modes, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
 
-                # Calculate offroad rate. TODO: Refactoring!
-                data_cpu = data_copy.cpu()
-                orig_poses = data_cpu.orig.cpu().numpy()
-                clamped_drivable_areas = data_cpu.clamped_drivable_area
-                outline_drivable_area_indexes = data_cpu.outline_drivable_area_index
-
-                total_amount_of_samples += len(orig_poses)
+                # Calculate offroad rate
+                # clamped_drivable_areas = data.clamped_drivable_area
+                # outline_drivable_area_indexes = data.outline_drivable_area_index
+                total_amount_of_samples += batch_size
 
                 # record the prediction and ground truth
                 for batch_id in range(batch_size):
+
                     forecasted_trajectories[seq_id] = [pred_y_k for pred_y_k in pred_y[batch_id]]
+                    forecasted_probabilities[seq_id] = traj_probabilities[batch_id]
+
                     gt_trajectories[seq_id] = gt[batch_id]
 
-                    # Calculate offroad rate. TODO: Refactoring!
-                    current_pred = forecasted_trajectories[seq_id][0]
-                    current_gt = gt_trajectories[seq_id] # TODO: I dunno why but here gt trajectory presented in cumulative format
+                    # print(f'probabilities: {traj_probabilities[batch_id]}')
 
-                    drivable_area_polygons = clamped_drivable_areas[batch_id]
-                    outline_da_polygon_index = outline_drivable_area_indexes[batch_id]
+                    # # Calculate offroad rate
+                    # drivable_area_polygons = clamped_drivable_areas[batch_id]
+                    # outline_da_polygon_index = outline_drivable_area_indexes[batch_id]
+                    #
+                    current_pred = forecasted_trajectories[seq_id]
+                    # outside_da_mask_pred = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_pred, show_visualization=False)
+                    #
+                    current_gt = gt_trajectories[seq_id]
+                    # #outside_da_mask_gt = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_gt, show_visualization=False)
+                    #
+                    # # visualization work only if batch size = 1
 
-                    outside_da_mask_pred = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_pred, show_visualization=False)
-                    #outside_da_mask_gt = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, current_gt, show_visualization=False)
-
-                    count_points_outside = np.count_nonzero(outside_da_mask_pred)
-
-                    # visualization work only if batch size = 1
-                    # polylines = self.get_polylines_from_data(data_cpu)
-                    # visual.draw_scene(polylines, current_gt, current_pred, outside_da_mask_pred)
-
-                    outside_da_counter += count_points_outside
-                    # end
+                    if show_sample:
+                        polylines = da_helper.get_da_polylines_from_data(data_copy)
+                        visual.draw_scene(polylines, current_gt, current_pred) #, outside_da_mask_pred)
+                        show_sample = False
+                    #
+                    # outside_da_counter += np.count_nonzero(outside_da_mask_pred)
+                    # # end
 
                     seq_id += 1
 
-
+            # calc metric over TOP1 trajectory
             metric_results = get_displacement_errors_and_miss_rate(
                 forecasted_trajectories,
                 gt_trajectories,
-                k,
+                1,
                 horizon,
-                miss_threshold
+                miss_threshold,
+                forecasted_probabilities
             )
+
+            # calc metric over TOP_k trajectories
+            metric_results_over_k = get_displacement_errors_and_miss_rate(
+                forecasted_trajectories,
+                gt_trajectories,
+                num_modes,
+                horizon,
+                miss_threshold,
+                forecasted_probabilities
+            )
+
+            for key in metric_results_over_k.keys():
+                metric_results[f'{key}_over_{num_modes}'] = metric_results_over_k[key]
 
             metric_results['offroad_rate'] = outside_da_counter / (total_amount_of_samples * 30)  # 30 - forecast horizon
 

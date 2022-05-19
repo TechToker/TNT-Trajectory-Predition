@@ -4,7 +4,6 @@ from tqdm import tqdm
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch_geometric.data import DataLoader
 
 # from core.model.backbone.vectornet import VectorNetBackbone
@@ -13,9 +12,9 @@ from core.model.layers.target_prediction import TargetPred
 # from core.model.layers.target_prediction_v2 import TargetPred
 from core.model.layers.motion_etimation import MotionEstimation
 from core.model.layers.scoring_and_selection import TrajScoreSelection, distance_metric
-from core.loss import TNTLoss
+from core.losses.loss import TNTLoss
 
-from core.dataloader.argoverse_loader_v2 import GraphData, ArgoverseInMem
+from core.dataloader.argoverse_loader_v2 import ArgoverseInMem
 
 
 class TNT(nn.Module):

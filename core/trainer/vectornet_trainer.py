@@ -1,22 +1,14 @@
-import copy
-import time
-
 from tqdm import tqdm
 
-import wandb
 import torch
 import numpy as np
-import torch.nn as nn
 from torch.optim import Adam
-from torch_geometric.data import DataLoader
-from torch_geometric.nn import DataParallel
 
 import core.util.visualization as visual
 
 from core.trainer.trainer import Trainer
 from core.model.vectornet import VectorNet
 from core.optim_schedule import ScheduledOptim
-from core.drivable_area_loss import DrivableAreaLoss
 
 
 class VectorNetTrainer(Trainer):
@@ -135,13 +127,12 @@ class VectorNetTrainer(Trainer):
             bar_format="{l_bar}{r_bar}"
         )
 
-        #return 0
-
         for i, data in data_iter:
             n_graph = data.num_graphs
             if training:
 
-                loss = self.model.loss_override_test(data.to(self.device))
+                loss = self.model.mtp_loss(data.to(self.device))
+                #loss = self.model.loss_override_test(data.to(self.device))
                 #loss = self.model.loss(data.to(self.device))
 
                 self.optm_schedule.zero_grad()
@@ -152,7 +143,8 @@ class VectorNetTrainer(Trainer):
             else:
                 with torch.no_grad():
 
-                    loss = self.model.loss_override_test(data.to(self.device))
+                    loss = self.model.mtp_loss(data.to(self.device))
+                    #loss = self.model.loss_override_test(data.to(self.device))
                     #loss = self.model.loss(data.to(self.device))
 
                     self.write_log("Eval Loss", loss.item() / n_graph, i + epoch * len(dataloader))
@@ -170,17 +162,6 @@ class VectorNetTrainer(Trainer):
             self.write_log("LR", learning_rate, epoch)
 
         return avg_loss / num_sample
-
-    def epoch_ending(self, train_loss, val_loss, metric):
-        # return 0
-        wandb.log({'Train loss': train_loss,
-                   'Val loss': val_loss,
-                   'Learning_rate': self.optim.param_groups[0]['lr'],
-                   'MinADE': metric["minADE"],
-                   'MinFDE': metric["minFDE"],
-                   'MR': metric["MR"],
-                   'Offroad_rate': metric['offroad_rate']
-                   })
 
     def test(self):
         # Visualization on map

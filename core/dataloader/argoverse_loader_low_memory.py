@@ -265,6 +265,9 @@ class ArgoverseCustom(Dataset):
     def _get_y(data_seq):
         traj_obs = data_seq['all_agents_history'].values[0][0]
         traj_fut = data_seq['future_trajectories'].values[0][0]
+
         offset_fut = np.vstack([traj_fut[0, :] - traj_obs[-1, :2], traj_fut[1:, :] - traj_fut[:-1, :]])
-        return offset_fut.reshape(-1).astype(np.float32)
+        offset_fut = offset_fut.reshape(-1).astype(np.float32)
+
+        return offset_fut
 

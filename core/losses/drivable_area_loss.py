@@ -18,30 +18,24 @@ class DrivableAreaLoss(nn.Module):
         self.show_visualization = show_visualization
         self.query_search_range_manhattan = query_search_range_manhattan
 
-    def get_polylines_from_data(self, data):
-        nodes = data.x.detach().numpy()
-        cluster = data.cluster.detach().numpy()
-
-        polylines = []
-        for cluster_idc in np.unique(cluster):
-            [indices] = np.where(cluster == cluster_idc)
-            polyline = nodes[indices]
-
-            polylines.append(polyline)
-
-        return polylines
+    # def get_polylines_from_data(self, data):
+    #     nodes = data.x.detach().numpy()
+    #     cluster = data.cluster.detach().numpy()
+    #
+    #     polylines = []
+    #     for cluster_idc in np.unique(cluster):
+    #         [indices] = np.where(cluster == cluster_idc)
+    #         polyline = nodes[indices]
+    #
+    #         polylines.append(polyline)
+    #
+    #     return polylines
 
     def forward(self, data, pred_trajs, gt_trajs):
 
-        data_cpu = data.cpu()
-
-        orig_poses = data_cpu.orig.cpu().numpy()
-        clamped_drivable_areas = data_cpu.clamped_drivable_area
-        outline_drivable_area_indexes = data_cpu.outline_drivable_area_index
-
         outside_da_masks = []
 
-        for i, pos in enumerate(orig_poses):  # foreach each sample in batch
+        for i in range(data.num_graphs):  # foreach each sample in batch
 
             pred = pred_trajs[i]
             gt = gt_trajs[i]
@@ -51,17 +45,18 @@ class DrivableAreaLoss(nn.Module):
 
             # Works only if batch size = 1 and data not forwarded into VectorNet
             if self.show_visualization:
-                polylines = self.get_polylines_from_data(data_cpu)
+                data_cpu = data.cpu()
+                polylines = da_helper.get_da_polylines_from_data(data_cpu)
                 visual.draw_scene(polylines, reshape_gt, reshape_pred)
                 #visual.draw_drivable_area(norm_drivable_areas_boundaries, -100, 100, -100, 100)
 
-            drivable_area_polygons = clamped_drivable_areas[i]
-            outline_da_polygon_index = outline_drivable_area_indexes[i]
+            drivable_area_polygons = data.clamped_drivable_area[i]
+            outline_da_polygon_index = data.outline_drivable_area_index[i]
 
             outside_da_mask = da_helper.out_of_drivable_area_check(drivable_area_polygons, outline_da_polygon_index, reshape_pred)
 
-            # if self.show_visualization:
-            #     visual.draw_scene(polylines, reshape_gt, reshape_pred, outside_da_mask)
+            if self.show_visualization:
+                visual.draw_scene(polylines, reshape_gt, reshape_pred, outside_da_mask)
 
             #outside_da_mask = np.repeat(outside_da_mask, 2)  # back to shape 1x60 from 2x30
             outside_da_masks.append(outside_da_mask)
@@ -76,6 +71,7 @@ class DrivableAreaLoss(nn.Module):
             # Make cumsum
             pred = torch.reshape(pred_trajs[i], (30, 2))
             pred = torch.cumsum(pred, dim=0)
+
             #pred = torch.reshape(pred, (-1,))
 
             gt = torch.reshape(gt_trajs[i], (30, 2))
