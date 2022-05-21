@@ -131,7 +131,8 @@ class VectorNetTrainer(Trainer):
             n_graph = data.num_graphs
             if training:
 
-                loss = self.model.mtp_loss(data.to(self.device))
+                loss = self.model.covernet_loss(data.to(self.device))
+                #loss = self.model.mtp_loss(data.to(self.device))
                 #loss = self.model.loss_override_test(data.to(self.device))
                 #loss = self.model.loss(data.to(self.device))
 
@@ -143,7 +144,8 @@ class VectorNetTrainer(Trainer):
             else:
                 with torch.no_grad():
 
-                    loss = self.model.mtp_loss(data.to(self.device))
+                    loss = self.model.covernet_loss(data.to(self.device))
+                    #loss = self.model.mtp_loss(data.to(self.device))
                     #loss = self.model.loss_override_test(data.to(self.device))
                     #loss = self.model.loss(data.to(self.device))
 

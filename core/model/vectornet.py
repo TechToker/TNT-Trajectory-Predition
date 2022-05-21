@@ -6,6 +6,7 @@
 
 import os
 import copy
+import pickle
 
 import torch
 import torch.nn as nn
@@ -18,6 +19,7 @@ from core.model.layers.basic_module import MLP
 from core.model.backbone.vectornet_v2 import VectorNetBackbone
 from core.losses.loss import VectorLoss
 from core.losses.mtp_loss import MTPLoss
+from core.losses.covernet_loss import ConstantLatticeLoss
 from core.losses.drivable_area_loss import DrivableAreaLoss
 
 from core.dataloader.argoverse_loader_v2 import ArgoverseInMem
@@ -48,12 +50,17 @@ class VectorNet(nn.Module):
 
         self.device = device
 
-        self.criterion = VectorLoss(with_aux)
-        self.test_criterion = DrivableAreaLoss(show_visualization=False)
-
         self.num_of_modes = 3
 
-        self.mtp_criterion = MTPLoss(self.num_of_modes)
+        # self.criterion = VectorLoss(with_aux)
+        # self.test_criterion = DrivableAreaLoss(show_visualization=False)
+        # self.mtp_criterion = MTPLoss(self.num_of_modes)
+
+        PATH_TO_EPSILON_SET = "./trajectory_set/epsilon_8_argo.pkl"
+        trajectories = pickle.load(open(PATH_TO_EPSILON_SET, 'rb'))
+        self.trajectories_set = torch.Tensor(trajectories)
+
+        self.covernet_criterion = ConstantLatticeLoss(self.trajectories_set)
 
         # subgraph feature extractor
         self.backbone = VectorNetBackbone(
@@ -70,19 +77,21 @@ class VectorNet(nn.Module):
         self.traj_pred_mlp = nn.Sequential(
             MLP(global_graph_width, traj_pred_mlp_width, traj_pred_mlp_width),
             # nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels) # For MSE-loss
-            nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels * self.num_of_modes + self.num_of_modes) # For MTP-loss
+            # nn.Linear(traj_pred_mlp_width, self.horizon * self.out_channels * self.num_of_modes + self.num_of_modes) # For MTP-loss
+            nn.Linear(traj_pred_mlp_width, len(trajectories)) # For CoverNet-loss
         )
 
-    def prediction_normalization(self, prediction):
-        # Normalize the probabilities to sum to 1 for inference
-        mode_probabilities = prediction[:, -self.num_of_modes:].clone()
-        if not self.training:
-            mode_probabilities = f.softmax(mode_probabilities, dim=-1)
-
-        predictions = prediction[:, :-self.num_of_modes]
-
-        # return pred
-        return torch.cat((predictions, mode_probabilities), 1)
+    # for MTP
+    # def prediction_normalization(self, prediction):
+    #     # Normalize the probabilities to sum to 1 for inference
+    #     mode_probabilities = prediction[:, -self.num_of_modes:].clone()
+    #     if not self.training:
+    #         mode_probabilities = f.softmax(mode_probabilities, dim=-1)
+    #
+    #     predictions = prediction[:, :-self.num_of_modes]
+    #
+    #     # return pred
+    #     return torch.cat((predictions, mode_probabilities), 1)
 
     def forward(self, data):
         """
@@ -92,25 +101,59 @@ class VectorNet(nn.Module):
         global_feat, _, _ = self.backbone(data) # [batch_size, time_step_len, global_graph_width]
         target_feat = global_feat[:, 0]
 
-        pred = self.traj_pred_mlp(target_feat)
-        pred = self.prediction_normalization(pred)
+        # For MTP
+        # pred = self.traj_pred_mlp(target_feat)
+        #pred = self.prediction_normalization(pred)
+        # end MTP
 
-        return pred
+        logits = self.traj_pred_mlp(target_feat)
 
-    def mtp_loss(self, data):
+        trajectories = []  # shape - [batch_size, top_trajectories]
+        probabilities = []  # shape [batch_size, top_probabilities]
+
+        for sample_id in range(len(logits)):
+            sorted_logits_indexes = logits[sample_id].argsort(descending=True)
+
+            sorted_logits = logits[sample_id][sorted_logits_indexes]
+            sorted_logits = sorted_logits.cpu().detach().numpy()
+
+            sorted_logits_indexes = sorted_logits_indexes.cpu().detach().numpy()
+            sorted_trajectories = self.trajectories_set[sorted_logits_indexes]
+
+            trajectories.append(sorted_trajectories[:self.num_of_modes])
+            probabilities.append(sorted_logits[:self.num_of_modes])
+
+        return trajectories, probabilities
+
+    def covernet_loss(self, data):
+
         global_feat, aux_out, aux_gt = self.backbone(data)
         target_feat = global_feat[:, 0]
 
         pred = self.traj_pred_mlp(target_feat)
-        pred = self.prediction_normalization(pred)
 
         y = data.y.view(-1, self.out_channels * self.horizon)
         y = torch.reshape(y, (len(y), 30, 2))
         y = torch.unsqueeze(y, 1)
 
-        loss = self.mtp_criterion(pred, y)
+        loss = self.covernet_criterion(pred, y)
 
         return loss
+
+    # def mtp_loss(self, data):
+    #     global_feat, aux_out, aux_gt = self.backbone(data)
+    #     target_feat = global_feat[:, 0]
+    #
+    #     pred = self.traj_pred_mlp(target_feat)
+    #     pred = self.prediction_normalization(pred)
+    #
+    #     y = data.y.view(-1, self.out_channels * self.horizon)
+    #     y = torch.reshape(y, (len(y), 30, 2))
+    #     y = torch.unsqueeze(y, 1)
+    #
+    #     loss = self.mtp_criterion(pred, y)
+    #
+    #     return loss
 
     # def loss(self, data):
     #     global_feat, aux_out, aux_gt = self.backbone(data)

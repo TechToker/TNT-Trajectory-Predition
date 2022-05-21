@@ -90,12 +90,16 @@ def draw_scene(polylines, future_trajectory, model_prediction, outside_da_mask=N
 
     draw_future_trajectory(plt, future_trajectory, 'g', width=3)
 
-    # for prediction in model_prediction:
-    #     draw_future_trajectory(plt, prediction, 'yellow', width=2)
+    for i, prediction in enumerate(model_prediction):
+        red_channel = 1 - (i / len(model_prediction)) * 0.7
+        color = (red_channel, 0, 0)
 
-    draw_future_trajectory(plt, model_prediction[0], (1, 0, 0), width=2)
-    draw_future_trajectory(plt, model_prediction[1], (0.8, 0, 0), width=2)
-    draw_future_trajectory(plt, model_prediction[2], (0.5, 0, 0), width=2)
+        draw_future_trajectory(plt, prediction, color, width=1)
+
+
+    # draw_future_trajectory(plt, model_prediction[0], (1, 0, 0), width=2)
+    # draw_future_trajectory(plt, model_prediction[1], (0.8, 0, 0), width=2)
+    # draw_future_trajectory(plt, model_prediction[2], (0.5, 0, 0), width=2)
 
     # TODO: Create good-looking calling
     # get points outside of drivable area

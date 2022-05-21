@@ -56,8 +56,8 @@ def train(args):
     #train_set = ArgoverseInMemv2(pjoin(args.data_root, "train_intermediate")) #.shuffle()
     #eval_set = ArgoverseInMemv2(pjoin(args.data_root, "val_intermediate"))
 
-    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 35000 , graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 79817 # 205942 #.shuffle()
-    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 1383, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 13839 # 39472
+    train_set = ArgoverseCustom(pjoin(args.data_root, "train_intermediate"), 79817, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 79817 # 205942 #.shuffle()
+    eval_set = ArgoverseCustom(pjoin(args.data_root, "val_intermediate"), 13839, graph_type=GRAPH_TYPE.DRIVABLE_AREA) # 13839 # 39472
 
     # init output dir
     time_stamp = datetime.now().strftime("%m-%d-%H-%M-%S")
@@ -90,7 +90,7 @@ def train(args):
         model_path=args.resume_model if hasattr(args, "resume_model") and args.resume_model else None
     )
 
-    wandb.init(project='VectorNet', entity='techtoker')
+    # wandb.init(project='VectorNet', entity='techtoker')
 
     # resume minimum eval loss
     min_eval_loss = trainer.min_eval_loss
@@ -104,17 +104,17 @@ def train(args):
         # compute the metrics and save
         metric = trainer.compute_metric()
         #
-        wandb.log({'Train loss': train_loss,
-                   'Val loss': eval_loss,
-                   'Learning_rate': trainer.optim.param_groups[0]['lr'],
-                   f'MinADE_{num_modes}': metric[f'minADE_over_{num_modes}'],
-                   f'MinFDE_{num_modes}': metric[f'minFDE_over_{num_modes}'],
-                   f'MR_{num_modes}': metric[f'MR_over_{num_modes}'],
-                   'MinADE': metric['minADE'],
-                   'MinFDE': metric['minFDE'],
-                   'MR': metric[f'MR'],
-                   'Offroad_rate': metric['offroad_rate']
-                   })
+        # wandb.log({'Train loss': train_loss,
+        #            'Val loss': eval_loss,
+        #            'Learning_rate': trainer.optim.param_groups[0]['lr'],
+        #            f'MinADE_{num_modes}': metric[f'minADE_over_{num_modes}'],
+        #            f'MinFDE_{num_modes}': metric[f'minFDE_over_{num_modes}'],
+        #            f'MR_{num_modes}': metric[f'MR_over_{num_modes}'],
+        #            'MinADE': metric['minADE'],
+        #            'MinFDE': metric['minFDE'],
+        #            'MR': metric[f'MR'],
+        #            'Offroad_rate': metric['offroad_rate']
+        #            })
 
         if not min_eval_loss:
             min_eval_loss = eval_loss
@@ -140,14 +140,14 @@ if __name__ == "__main__":
     parser.add_argument("-a", "--aux_loss", action="store_true", default=True,
                         help="Training with the auxiliary recovery loss")
 
-    parser.add_argument("-b", "--batch_size", type=int, default=1, #64,
+    parser.add_argument("-b", "--batch_size", type=int, default=64, #64,
                         help="number of batch_size")
-    parser.add_argument("-e", "--n_epoch", type=int, default=30,
+    parser.add_argument("-e", "--n_epoch", type=int, default=50,
                         help="number of epochs")
     parser.add_argument("-w", "--num_workers", type=int, default=1, # 16,
                         help="dataloader worker size")
 
-    parser.add_argument("-c", "--with_cuda", action="store_true", default=False,
+    parser.add_argument("-c", "--with_cuda", action="store_true", default=True,
                         help="training with CUDA: true, or false")
     parser.add_argument("-cd", "--cuda_device", type=int, default=[], nargs='+',
                         help="CUDA device ids")
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                         help="printing loss every n iter: setting n")
     parser.add_argument("--on_memory", type=bool, default=True, help="Loading on memory: true or false")
 
-    parser.add_argument("--lr", type=float, default=1e-4, help="learning rate of adam") # 8e-5
+    parser.add_argument("--lr", type=float, default=3e-4, help="learning rate of adam") # 8e-5
     parser.add_argument("-we", "--warmup_epoch", type=int, default=10, # 10
                         help="The epoch to start the learning rate decay")
     parser.add_argument("-luf", "--lr_update_freq", type=int, default=5,
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     # parser.add_argument("-rc", "--resume_checkpoint", type=str,
     #                     #default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-05-00-30/checkpoint_iter27.ckpt",
     #                     #default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-04-12-42/checkpoint_iter6.ckpt",
-    #                     default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-18-11-26-49/checkpoint_iter1.ckpt", # MTP MODEL
+    #                     default="/home/techtoker/projects/TNT-Trajectory-Predition/pretrained_models/05-20-18-37-58/checkpoint_iter33.ckpt", # MTP MODEL
     #                     help="resume a checkpoint for fine-tune")
 
     parser.add_argument("-rm", "--resume_model", type=str, help="resume a model state for fine-tune")

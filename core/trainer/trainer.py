@@ -236,12 +236,8 @@ class Trainer(object):
         else:
             raise NotImplementedError
 
-
-    # def get_prediction_for_sample(self, data):
-
-
     def compute_metric(self, miss_threshold=2.0):
-        show_sample = True
+        show_amount_examples = 0
 
         """
         compute metric for test dataset
@@ -254,8 +250,8 @@ class Trainer(object):
         forecasted_trajectories, forecasted_probabilities, gt_trajectories = {}, {}, {}
         seq_id = 0
 
-        num_modes = self.model.num_of_modes # self.model.k if not self.multi_gpu else self.model.module.k
-        horizon = self.model.horizon # self.model.k if not self.multi_gpu else self.model.module.k
+        num_modes = self.model.num_of_modes  # self.model.k if not self.multi_gpu else self.model.module.k
+        horizon = self.model.horizon  # self.model.k if not self.multi_gpu else self.model.module.k
 
         self.model.eval()
         with torch.no_grad():
@@ -271,15 +267,17 @@ class Trainer(object):
 
                 # inference and transform dimension
                 out = self.model.inference(data.to(self.device))
+                pred_y, traj_probabilities = out # For CoverNet
 
-                #loss = self.model.mtp_loss(copy.deepcopy(data).to(self.device))
+                # for MTP
+                # traj_probabilities = out[:, -num_modes:]
+                # out = out[:, :-num_modes]
+                # end MTP
 
-                traj_probabilities = out[:, -num_modes:]
-                out = out[:, :-num_modes]
+                # dim_out = len(out.shape)
+                #pred_y = out.unsqueeze(dim_out).view((batch_size, num_modes, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format; FOR vanila and MTP
 
-                dim_out = len(out.shape)
-                # pred_y = out.unsqueeze(dim_out).view((batch_size, k, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
-                pred_y = out.unsqueeze(dim_out).view((batch_size, num_modes, horizon, 2)).cumsum(axis=2).cpu().numpy()  # cumulative format
+
 
                 # Calculate offroad rate
                 # clamped_drivable_areas = data.clamped_drivable_area
@@ -308,10 +306,10 @@ class Trainer(object):
                     #
                     # # visualization work only if batch size = 1
 
-                    if show_sample:
+                    if show_amount_examples > 0:
                         polylines = da_helper.get_da_polylines_from_data(data_copy)
                         visual.draw_scene(polylines, current_gt, current_pred) #, outside_da_mask_pred)
-                        show_sample = False
+                        show_amount_examples -= 1
                     #
                     # outside_da_counter += np.count_nonzero(outside_da_mask_pred)
                     # # end
